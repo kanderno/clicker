@@ -1,0 +1,11 @@
+{
+  "name": "tg-clicker",
+  "private": true,
+  "scripts": {
+    "dev:front": "npm --prefix frontend run dev",
+    "dev:back": "npm --prefix backend run dev",
+    "install:all": "npm --prefix frontend install && npm --prefix backend install",
+    "bot:setup": "npm --prefix backend run bot:setup --",
+    "bot:poll": "npm --prefix backend run bot:poll"
+  }
+}
