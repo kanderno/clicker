@@ -1,12 +1,23 @@
 {
   "name": "tg-clicker",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev:front": "npm --prefix frontend run dev",
     "dev:back": "npm --prefix backend run dev",
     "install:all": "npm --prefix frontend install && npm --prefix backend install",
     "bot:setup": "npm --prefix backend run bot:setup --",
     "bot:poll": "npm --prefix backend run bot:poll",
-    "bot:check": "npm --prefix backend run bot:check"
+    "bot:check": "npm --prefix backend run bot:check",
+    "build": "npm --prefix frontend ci && npm --prefix frontend run build",
+    "start": "node backend/src/index.js",
+    "bot:prod": "npm --prefix backend run bot:prod"
+  },
+  "dependencies": {
+    "@fastify/cors": "^9.0.1",
+    "@fastify/jwt": "^8.0.1",
+    "@fastify/rate-limit": "^9.1.0",
+    "@supabase/supabase-js": "^2.45.0",
+    "fastify": "^4.28.1"
   }
 }

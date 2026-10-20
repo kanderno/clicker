@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
@@ -659,6 +662,54 @@ app.delete(
     return { ok: true };
   },
 );
+
+// ---------- Mini App: раздача собранного фронтенда ----------
+// В Docker фронт собирается в /usr/src/app/frontend/dist (вне /app, чтобы bind mount Bothost его не затёр).
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const distDir = path.resolve(process.env.FRONTEND_DIST || path.join(__dirname, '../../frontend/dist'));
+const MIME = {
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.html': 'text/html; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.ico': 'image/x-icon',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+};
+
+if (fs.existsSync(path.join(distDir, 'index.html'))) {
+  app.get('/', (req, reply) =>
+    reply
+      .header('Cache-Control', 'no-cache')
+      .type(MIME['.html'])
+      .send(fs.createReadStream(path.join(distDir, 'index.html'))),
+  );
+
+  app.get('/assets/*', async (req, reply) => {
+    const assetsDir = path.join(distDir, 'assets');
+    const file = path.resolve(assetsDir, req.params['*']);
+    if (!file.startsWith(assetsDir + path.sep)) return reply.code(404).send({ error: 'not_found' });
+    try {
+      const stat = await fs.promises.stat(file);
+      if (!stat.isFile()) return reply.code(404).send({ error: 'not_found' });
+      return reply
+        .header('Cache-Control', 'public, max-age=31536000, immutable')
+        .type(MIME[path.extname(file).toLowerCase()] || 'application/octet-stream')
+        .send(fs.createReadStream(file));
+    } catch {
+      return reply.code(404).send({ error: 'not_found' });
+    }
+  });
+
+  app.log.info(`Mini App: ${distDir}`);
+} else {
+  app.log.warn(`Mini App не собрана: нет ${path.join(distDir, 'index.html')}`);
+}
 
 try {
   await app.listen({ port: config.port, host: '0.0.0.0' });

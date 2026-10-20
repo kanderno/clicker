@@ -2,6 +2,8 @@
 
 Монорепо: `/frontend` (React + Vite + Tailwind + @twa-dev/sdk), `/backend` (Node.js + Fastify).
 
+**Продакшен на Bothost:** см. [DEPLOY.md](DEPLOY.md). Один контейнер: Fastify раздаёт Mini App, API и вебхук, база — в Supabase.
+
 ## Запуск
 ```bash
 npm run install:all

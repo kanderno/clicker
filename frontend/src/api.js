@@ -1,6 +1,9 @@
 import WebApp from '@twa-dev/sdk';
 
-const BASE = import.meta.env.VITE_API_BASE || '/api';
+// В разработке — прокси Vite (/api -> localhost:3001).
+// В продакшене фронт и API на одном домене, поэтому запросы идут в корень.
+// VITE_API_BASE нужен, только если фронт вынесен на отдельный домен (например, Vercel).
+const BASE = import.meta.env.VITE_API_BASE ?? (import.meta.env.DEV ? '/api' : '');
 
 let token = null; // храним только в памяти; при каждом запуске заново авторизуемся
 

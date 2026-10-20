@@ -36,7 +36,8 @@ if (generatedSecret) webhookSecret = crypto.randomBytes(24).toString('hex');
 
 try {
   const api = createTelegramApi(token, { base: process.env.TELEGRAM_API_BASE || 'https://api.telegram.org' });
-  const apiBaseUrl = withWebhook ? process.env.PUBLIC_API_URL || `${webAppUrl}/api` : null;
+  // По умолчанию API живёт на том же домене, что и Mini App (без префикса /api).
+  const apiBaseUrl = withWebhook ? process.env.PUBLIC_API_URL || webAppUrl : null;
   const done = await setupBot(api, { webAppUrl, apiBaseUrl, webhookSecret });
 
   // В .env пишем только после успешной настройки: при ошибке файл остаётся как был
