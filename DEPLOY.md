@@ -14,6 +14,7 @@ Mini App → https://домен/auth, /tap, ...   ┘
 - `Dockerfile` — запасной вариант: собирает React и запускает бэкенд в одном образе.
 - `frontend/dist` — уже собранный Mini App, его не нужно собирать на хостинге.
 - `backend/src/index.js` — раздаёт `frontend/dist` и `/assets/*`.
+- `ws` — замена WebSocket для Node.js 20: свежий supabase-js без неё не стартует.
 - `frontend/src/api.js` — в продакшене обращается к API на том же домене.
 - `backend/scripts/setup-production.js` — ставит команды, описание, кнопку меню и вебхук.
 - `.dockerignore` — не тащит в образ `node_modules`, `.env`, `dist` и архив.
@@ -82,6 +83,7 @@ node backend/scripts/setup-production.js
 - **502 / пустая страница.** В логах проверь, что приложение слушает `0.0.0.0` и `PORT`. Порт в панели должен совпадать с `3000`.
 - **`Mini App не собрана`.** Нет папки `frontend/dist`. Собери её локально командой `npm run build` и залей в Git/архив.
 - **`Cannot find package 'fastify'`.** Bothost запускает код из `/app`, а зависимости не поставились. Главный файл должен быть `index.js`, а в корневом `package.json` — блок `dependencies` (он уже есть). После правок сделай новый деплой, не просто рестарт.
+- **`Node.js detected but native WebSocket not found`.** В проекте уже есть `ws` и подключение в `backend/src/db.js`. Если ошибка осталась — залей новый архив и пересобери: старый `node_modules` мог остаться от предыдущей сборки.
 - **404 на вебхуке.** URL должен быть `https://домен/telegram/webhook` (без `/api`). Секрет в Telegram и в Bothost должен совпадать.
 - **`invalid_init_data`.** Mini App открыт не из Telegram или `BOT_TOKEN` не тот, которым подписаны данные.
 - **CORS.** Если фронт на другом домене (Vercel), задай `FRONTEND_ORIGIN=https://фронт` и `VITE_API_BASE=https://бэкенд` при сборке.
