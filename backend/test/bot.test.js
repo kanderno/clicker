@@ -142,3 +142,31 @@ test('upsertEnvLine: замена, добавление, сохранение о
   assert.equal(upsertEnvLine('', 'K', 'v'), 'K=v\n'); // новый файл заканчивается переводом строки
   assert.equal(upsertEnvLine('WEBAPP_URL_OTHER=1\n', 'WEBAPP_URL', 'x'), 'WEBAPP_URL_OTHER=1\nWEBAPP_URL=x\n');
 });
+
+import { explainNetworkError } from '../src/bot.js';
+
+const netErr = (code, message = '') => Object.assign(new TypeError('fetch failed'), { cause: Object.assign(new Error(message), { code }) });
+
+test('explainNetworkError: «fetch failed» превращается в причину и подсказку', () => {
+  const timeout = explainNetworkError(netErr('ETIMEDOUT', 'connect ETIMEDOUT 149.154.166.110:443'));
+  assert.ok(timeout.includes('ETIMEDOUT') && timeout.includes('VPN') && timeout.includes('149.154.166.110'));
+
+  const dns = explainNetworkError(netErr('ENOTFOUND', 'getaddrinfo ENOTFOUND api.telegram.org'));
+  assert.ok(dns.includes('DNS'));
+
+  const cert = explainNetworkError(netErr('UNABLE_TO_VERIFY_LEAF_SIGNATURE', 'unable to verify the first certificate'));
+  assert.ok(cert.includes('сертификата'));
+
+  assert.ok(explainNetworkError(netErr('ECONNRESET', 'read ECONNRESET')).includes('VPN'));
+});
+
+test('explainNetworkError: вложенные ошибки (несколько адресов), пустое сообщение, не-ошибки', () => {
+  const agg = Object.assign(new TypeError('fetch failed'), {
+    cause: Object.assign(new Error(''), { code: 'ETIMEDOUT', errors: [Object.assign(new Error('connect ETIMEDOUT 1.2.3.4:443'), { code: 'ETIMEDOUT' })] }),
+  });
+  const text = explainNetworkError(agg);
+  assert.ok(text.includes('1.2.3.4') && text.includes('VPN'));
+  assert.ok(explainNetworkError(new Error('странная ошибка')).includes('странная ошибка'));
+  assert.ok(explainNetworkError('просто строка').includes('просто строка'));
+  assert.ok(explainNetworkError(undefined).length > 0);
+});

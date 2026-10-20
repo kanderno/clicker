@@ -1,6 +1,6 @@
 // Бот для разработки: npm run bot:poll (не нужен публичный адрес бэкенда).
 // В продакшене вместо этого работает вебхук (npm run bot:setup -- <адрес> --webhook).
-import { createTelegramApi, handleUpdate, isHttpsUrl } from '../src/bot.js';
+import { createTelegramApi, explainNetworkError, handleUpdate, isHttpsUrl } from '../src/bot.js';
 
 const token = process.env.BOT_TOKEN;
 const webAppUrl = (process.env.WEBAPP_URL || '').replace(/\/+$/, '');
@@ -30,7 +30,7 @@ for (;;) {
       }
     }
   } catch (err) {
-    console.error('Нет связи с Telegram, повтор через 5 сек:', err.message);
+    console.error('Нет связи с Telegram, повтор через 5 сек:', explainNetworkError(err));
     await new Promise((r) => setTimeout(r, 5000));
   }
 }

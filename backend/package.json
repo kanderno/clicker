@@ -7,7 +7,8 @@
     "start": "node src/index.js",
     "test": "node --test",
     "bot:setup": "node --env-file=.env scripts/bot-setup.js",
-    "bot:poll": "node --env-file=.env scripts/bot-poll.js"
+    "bot:poll": "node --env-file=.env scripts/bot-poll.js",
+    "bot:check": "node --env-file=.env scripts/bot-check.js"
   },
   "dependencies": {
     "@fastify/cors": "^9.0.1",

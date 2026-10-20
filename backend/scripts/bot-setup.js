@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { createTelegramApi, isHttpsUrl } from '../src/bot.js';
+import { createTelegramApi, explainNetworkError, isHttpsUrl } from '../src/bot.js';
 import { setupBot, upsertEnvLine } from '../src/botSetup.js';
 
 const args = process.argv.slice(2);
@@ -51,6 +51,7 @@ try {
   if (generatedSecret) console.log('Создан TELEGRAM_WEBHOOK_SECRET (в backend/.env). Добавь его и WEBAPP_URL в переменные хостинга бэкенда.');
   if (!withWebhook) console.log('Чтобы бот отвечал на /start, запусти в отдельном окне: npm run bot:poll');
 } catch (err) {
-  console.error('Не получилось:', err.message);
+  console.error('Не получилось:', explainNetworkError(err));
+  console.error('Проверить связь и токен: npm run bot:check');
   process.exit(1);
 }

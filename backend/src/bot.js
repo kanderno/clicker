@@ -103,3 +103,23 @@ export function createTelegramApi(token, { base = 'https://api.telegram.org', fe
       call('sendMessage', { chat_id, text, parse_mode: 'HTML', disable_web_page_preview: true, ...extra }),
   };
 }
+
+// ---------- понятное объяснение сетевых ошибок ----------
+const DNS_CODES = ['ENOTFOUND', 'EAI_AGAIN'];
+const BLOCK_CODES = ['ETIMEDOUT', 'UND_ERR_CONNECT_TIMEOUT', 'ECONNREFUSED', 'ECONNRESET', 'EHOSTUNREACH', 'ENETUNREACH', 'UND_ERR_SOCKET'];
+
+/** "fetch failed" ничего не говорит: достаём настоящую причину (err.cause) и подсказываем, что делать. */
+export function explainNetworkError(err) {
+  const inner = err?.cause?.errors?.[0] ?? err?.cause ?? err;
+  const code = inner?.code || err?.cause?.code || err?.code || '';
+  const detail = inner?.message || err?.cause?.message || err?.message || String(err);
+  let hint = 'Проверь интернет и попробуй ещё раз.';
+  if (DNS_CODES.includes(code)) {
+    hint = 'Не находится адрес api.telegram.org (проблема DNS). Проверь интернет или включи VPN.';
+  } else if (BLOCK_CODES.includes(code)) {
+    hint = 'Нет соединения с api.telegram.org: его может блокировать провайдер. Включи VPN для всего компьютера (не только для браузера или Telegram) и повтори.';
+  } else if (/CERT|SSL|TLS/i.test(code) || /certificate/i.test(detail)) {
+    hint = 'Ошибка сертификата: мешает антивирус или прокси, проверяющий HTTPS. Отключи проверку HTTPS в антивирусе или включи VPN.';
+  }
+  return `${detail}${code && !detail.includes(code) ? ` (${code})` : ''}. ${hint}`;
+}
