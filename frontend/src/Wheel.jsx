@@ -106,7 +106,7 @@ export default function Wheel({ active, balance, onBalance }) {
           style={{ width: 0, height: 0, borderLeft: '14px solid transparent', borderRight: '14px solid transparent', borderTop: '26px solid #f8fafc', filter: 'drop-shadow(0 2px 3px rgba(0,0,0,.5))' }} />
         <svg viewBox="0 0 300 300" className="h-full w-full drop-shadow-[0_0_30px_rgba(251,191,36,0.25)]"
           style={{ transform: `rotate(${rotation}deg)`, transition: `transform ${SPIN_MS}ms cubic-bezier(0.12, 0.6, 0.1, 1)` }}>
-          <circle cx="150" cy="150" r="146" fill="#0f172a" stroke="#fbbf24" strokeWidth="4" />
+          <circle cx="150" cy="150" r="146" fill="#fff8dd" stroke="#d5ad31" strokeWidth="4" />
           {n === 0 && <text x="150" y="155" textAnchor="middle" fill="#64748b" fontSize="14">загрузка…</text>}
           {prizes.map((p, i) => (
             <g key={p.id}>
@@ -120,7 +120,7 @@ export default function Wheel({ active, balance, onBalance }) {
               </text>
             </g>
           ))}
-          <circle cx="150" cy="150" r="22" fill="#0f172a" stroke="#fbbf24" strokeWidth="4" />
+          <circle cx="150" cy="150" r="22" fill="#fff8dd" stroke="#d5ad31" strokeWidth="4" />
         </svg>
       </div>
 

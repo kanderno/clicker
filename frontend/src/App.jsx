@@ -8,11 +8,11 @@ import Miners from './Miners.jsx';
 import Admin from './Admin.jsx';
 
 const BASE_TABS = [
-  { id: 'game', label: 'Кликер' },
-  { id: 'bets', label: 'Прогнозы' },
-  { id: 'wheel', label: 'Колесо' },
-  { id: 'miners', label: 'Майнеры' },
-  { id: 'bank', label: 'Банк' },
+  { id: 'game', label: 'Играть', icon: '✦' },
+  { id: 'bets', label: 'Прогнозы', icon: '◉' },
+  { id: 'wheel', label: 'Колесо', icon: '◎' },
+  { id: 'miners', label: 'Майнеры', icon: '↗' },
+  { id: 'bank', label: 'Банк', icon: '▣' },
 ];
 
 function Main({ user }) {
@@ -21,7 +21,7 @@ function Main({ user }) {
   const gameRef = useRef(null);
   const [theft, setTheft] = useState(null); // { count, total, upToId }: показываем жертве, что у неё украли
   // Вкладка админа только для админов. Настоящая защита на сервере (403), это лишь интерфейс.
-  const tabs = user.isAdmin ? [...BASE_TABS, { id: 'admin', label: 'Админ' }] : BASE_TABS;
+  const tabs = user.isAdmin ? [...BASE_TABS, { id: 'admin', label: 'Админ', icon: '⌘' }] : BASE_TABS;
 
   const checkThefts = useCallback(async () => {
     try {
@@ -68,8 +68,8 @@ function Main({ user }) {
   };
 
   return (
-    <div className="h-full flex flex-col bg-gradient-to-b from-slate-900 to-slate-950">
-      <main className="flex-1 min-h-0">
+    <div className="app-shell">
+      <main className="app-main flex-1 min-h-0">
         {/* Кликер не размонтируем: его таймер отправки тапов должен работать всегда */}
         <div className={tab === 'game' ? 'h-full' : 'hidden'}>
           <Game ref={gameRef} user={user} balance={balance} onBalance={setBalance} />
@@ -94,7 +94,7 @@ function Main({ user }) {
       </main>
 
       {theft && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 px-6 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-2xl bg-slate-800 p-6 text-center text-white shadow-2xl ring-1 ring-red-500/40">
             <p className="text-xl font-bold text-red-400">Тебя обокрали!</p>
             <p className="mt-3 text-slate-200">
@@ -111,17 +111,17 @@ function Main({ user }) {
         </div>
       )}
 
-      <nav className="flex border-t border-slate-800 bg-slate-950">
+      <nav className="app-nav" aria-label="Разделы приложения" style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>
         {tabs.map((t) => (
           <button
             key={t.id}
             type="button"
             onClick={() => go(t.id)}
-            className={`flex-1 px-0.5 py-3.5 text-[11.5px] font-semibold sm:text-[13px] ${
-              tab === t.id ? 'text-yellow-400' : 'text-slate-500'
-            }`}
+            aria-current={tab === t.id ? 'page' : undefined}
+            className={`app-nav-item ${tab === t.id ? 'is-active' : ''}`}
           >
-            {t.label}
+            <span className="nav-icon" aria-hidden="true">{t.icon}</span>
+            <span>{t.label}</span>
           </button>
         ))}
       </nav>
@@ -150,7 +150,7 @@ export default function App() {
   }
 
   return (
-    <div className="h-full flex items-center justify-center bg-slate-900 text-white p-6">
+    <div className="app-loading h-full flex items-center justify-center bg-slate-900 text-white p-6">
       <div className="text-center">{content}</div>
     </div>
   );

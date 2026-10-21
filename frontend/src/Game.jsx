@@ -22,6 +22,8 @@ const Game = forwardRef(function Game({ user, balance, onBalance }, ref) {
   const lastTapAt = useRef(0);
   const floaterId = useRef(0);
   const areaRef = useRef(null);
+  const playerName = user.first_name || user.username || 'Игрок';
+  const playerInitial = Array.from(playerName)[0].toLocaleUpperCase('ru-RU');
 
   const flush = useCallback(() => {
     if (flushPromise.current) return flushPromise.current;
@@ -81,36 +83,53 @@ const Game = forwardRef(function Game({ user, balance, onBalance }, ref) {
   };
 
   return (
-    <div className="h-full flex flex-col items-center justify-between py-8 px-4 text-white">
-      <div className="text-center">
-        <p className="text-slate-400 text-sm">{user.first_name || user.username || 'Игрок'}</p>
-        <p className="mt-2 flex items-center justify-center gap-3 text-5xl font-extrabold text-yellow-400 tabular-nums">
-          <Coin className="w-11 h-11" />
-          {fmt(balance + pending)}
-        </p>
-        <p className="mt-2 h-5 text-xs text-slate-500">
-          {syncError
-            ? `⚠️ не сохранилось (${syncError}), повторим…`
-            : pending > 0
-              ? 'синхронизация…'
-              : 'сохранено ✓'}
-        </p>
-      </div>
+    <div className="game-screen">
+      <header className="game-header">
+        <div className="brand-lockup">
+          <span className="app-mark" aria-hidden="true">✦</span>
+          <span>
+            <span className="brand-title">ТАП-КЛУБ</span>
+            <span className="brand-caption">СОБИРАЙ МОНЕТЫ</span>
+          </span>
+        </div>
+        <span className="player-avatar" title={playerName}>{playerInitial}</span>
+      </header>
 
-      <div ref={areaRef} className="relative">
+      <section className="balance-card" aria-label="Текущий баланс">
+        <div className="balance-topline">
+          <p className="balance-label">ТВОЙ БАЛАНС</p>
+          <span className="balance-tag"><span /> В ИГРЕ</span>
+        </div>
+        <p className="balance-value">
+          <Coin className="balance-coin" />
+          <span className="tabular-nums">{fmt(balance + pending)}</span>
+        </p>
+        <p className={`sync-status ${syncError ? 'has-error' : pending > 0 ? 'is-pending' : ''}`}>
+          <span className="sync-dot" />
+          {syncError
+            ? `Не сохранилось (${syncError}), повторим…`
+            : pending > 0
+              ? 'Синхронизируем баланс…'
+              : 'Все монеты сохранены'}
+        </p>
+      </section>
+
+      <div ref={areaRef} className="coin-stage">
+        <span className="coin-orbit" aria-hidden="true" />
+        <span className="coin-halo" aria-hidden="true" />
         <button
+          type="button"
           onPointerDown={onTap}
-          className="w-64 h-64 rounded-full transition-transform duration-75 active:scale-95
-                     drop-shadow-[0_0_40px_rgba(251,191,36,0.45)]"
+          className="coin-tap-button"
           style={{ touchAction: 'manipulation' }}
-          aria-label="Тап"
+          aria-label="Нажать на монету и заработать одну монету"
         >
-          <Coin className="w-full h-full pointer-events-none" />
+          <Coin className="coin-art pointer-events-none" />
         </button>
         {floaters.map((f) => (
           <span
             key={f.id}
-            className="float-up absolute text-2xl font-bold text-yellow-200"
+            className="float-up tap-floater"
             style={{ left: f.x, top: f.y }}
           >
             +1
@@ -118,7 +137,16 @@ const Game = forwardRef(function Game({ user, balance, onBalance }, ref) {
         ))}
       </div>
 
-      <p className="text-slate-500 text-xs">Тапай, монеты сохраняются на сервере</p>
+      <div className="tap-copy">
+        <strong>Нажми на монету</strong>
+        <span>Каждый тап приближает к награде</span>
+      </div>
+
+      <div className="game-note">
+        <span className="note-spark" aria-hidden="true">✧</span>
+        <span><strong>1 тап = 1 монета</strong><small>Баланс синхронизируется автоматически</small></span>
+        <span className="note-arrow" aria-hidden="true">↗</span>
+      </div>
     </div>
   );
 });

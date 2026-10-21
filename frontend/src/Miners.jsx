@@ -76,7 +76,7 @@ export default function Miners({ active, onBalance }) {
         type="button"
         disabled={busy || view.pendingTotal === 0}
         onClick={() => act(collectMiners, (r) => `Собрано +${fmt(r.collected)}`)}
-        className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 py-3.5 text-lg font-bold text-slate-950 active:bg-emerald-400 disabled:opacity-40"
+        className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-yellow-400 py-3.5 text-lg font-bold text-slate-950 active:bg-yellow-300 disabled:opacity-40"
       >
         Собрать доход <Coin className="h-5 w-5" /> +{fmt(view.pendingTotal)}
       </button>

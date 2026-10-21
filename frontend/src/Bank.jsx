@@ -70,7 +70,7 @@ export default function Bank({ active, onBalance }) {
             {state ? fmt(state.wallet) : '…'}
           </p>
         </div>
-        <div className="rounded-2xl bg-emerald-900/40 p-4 ring-1 ring-emerald-500/30">
+        <div className="rounded-2xl bg-emerald-50 p-4 ring-1 ring-emerald-200">
           <p className="text-xs text-emerald-300/80">На счёте</p>
           <p className="mt-1 flex items-center gap-1.5 text-2xl font-bold text-emerald-300 tabular-nums">
             <Coin className="w-6 h-6 shrink-0" />
@@ -114,7 +114,7 @@ export default function Bank({ active, onBalance }) {
             type="button"
             disabled={busy}
             onClick={() => run(bankDeposit, (v) => `Положено ${fmt(v)}`)}
-            className="rounded-xl bg-emerald-500 py-3 font-semibold text-slate-950 active:bg-emerald-400 disabled:opacity-50"
+            className="rounded-xl bg-yellow-400 py-3 font-semibold text-slate-950 active:bg-yellow-300 disabled:opacity-50"
           >
             Положить
           </button>
