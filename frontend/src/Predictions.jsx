@@ -113,6 +113,14 @@ export default function Predictions({ active, balance, onBalance }) {
         {events?.map((ev) => {
           const mine = ev.myBet;
           const panelOpen = sel?.eventId === ev.id && ev.bettingOpen;
+          // При фиксированном коэффициенте выплату можно показать сразу, до закрытия события.
+          const selOdds = panelOpen && ev.payoutMode === 'odds'
+            ? ev.options.find((o) => o.id === sel.optionId)?.multiplier ?? null
+            : null;
+          const stake = Number(amount);
+          const potential = selOdds && Number.isInteger(stake) && stake > 0
+            ? Math.floor(stake * selOdds)
+            : null;
           return (
             <div key={ev.id} className="rounded-2xl bg-slate-800/70 p-4">
               <p className="font-semibold leading-snug">{ev.title}</p>
@@ -120,6 +128,7 @@ export default function Predictions({ active, balance, onBalance }) {
               <p className={`mt-2 text-xs ${ev.bettingOpen ? 'text-slate-500' : 'text-amber-400'}`}>
                 {ev.bettingOpen ? `Ставки до ${fmtDate(ev.deadline)}` : 'Ставки закрыты, ждём результат'}
                 {' · '}банк: {fmt(ev.totalPool)}
+                {ev.payoutMode === 'odds' && <span className="text-yellow-300"> · фикс. коэффициент</span>}
               </p>
 
               <div className="mt-3 space-y-2">
@@ -184,6 +193,13 @@ export default function Predictions({ active, balance, onBalance }) {
                       всё
                     </button>
                   </div>
+                  {selOdds && (
+                    <p className="mt-2 text-xs text-slate-400">
+                      Коэффициент <span className="text-yellow-300">x{selOdds}</span>
+                      {potential !== null && <> · выплата при победе: <span className="text-yellow-300">{fmt(potential)}</span></>}
+                    </p>
+                  )}
+
                   <button type="button" disabled={busy} onClick={submit}
                     className="mt-3 w-full rounded-xl bg-yellow-400 py-2.5 font-semibold text-slate-950 active:bg-yellow-300 disabled:opacity-50">
                     Поставить
@@ -246,7 +262,8 @@ export default function Predictions({ active, balance, onBalance }) {
       )}
 
       <p className="pb-2 text-center text-xs text-slate-500">
-        Множитель ориентировочный: он меняется, пока другие делают ставки. Выплата считается при закрытии события.
+        «Фикс. коэффициент» — выплата известна заранее: ставка × коэффициент. У остальных событий множитель
+        ориентировочный: он меняется, пока другие делают ставки, итог считается при закрытии события.
       </p>
     </div>
   );

@@ -7,7 +7,9 @@ export async function listEventsWithOptions(
 ) {
   let q = client
     .from('events')
-    .select('id, title, description, deadline, status, winning_option_id, refunded, created_at, resolved_at')
+    .select(
+      'id, title, description, deadline, status, payout_mode, winning_option_id, refunded, created_at, resolved_at',
+    )
     .order(orderBy, { ascending })
     .limit(limit);
   if (statuses) q = q.in('status', statuses);
@@ -18,7 +20,7 @@ export async function listEventsWithOptions(
 
   const { data: options, error: optErr } = await client
     .from('event_options')
-    .select('id, event_id, title, pool, position')
+    .select('id, event_id, title, pool, odds, position')
     .in('event_id', events.map((e) => e.id))
     .order('position', { ascending: true });
   if (optErr) return { error: optErr };
@@ -31,23 +33,32 @@ export async function listEventsWithOptions(
   return { events: events.map((e) => ({ ...e, options: byEvent.get(e.id) ?? [] })) };
 }
 
-// Вид события для игрока. Множитель только для отображения (итог считается при закрытии события).
+// Вид события для игрока.
+//  * режим 'odds': множитель — это фиксированный коэффициент варианта, выплата известна заранее;
+//  * режим 'pool' (тотализатор): множитель ориентировочный, он плывёт вместе с банком,
+//    итог считается при закрытии события.
 export function toPlayerView(events, myBets, now = Date.now()) {
   return events.map((e) => {
     const totalPool = e.options.reduce((sum, o) => sum + Number(o.pool), 0);
+    const fixedOdds = e.payout_mode === 'odds';
     return {
       id: e.id,
       title: e.title,
       description: e.description,
       deadline: e.deadline,
       bettingOpen: new Date(e.deadline).getTime() > now,
+      payoutMode: fixedOdds ? 'odds' : 'pool',
       totalPool,
       myBet: myBets.get(e.id) ?? null,
       options: e.options.map((o) => ({
         id: o.id,
         title: o.title,
         pool: Number(o.pool),
-        multiplier: Number(o.pool) > 0 ? Math.round((totalPool / Number(o.pool)) * 100) / 100 : null,
+        multiplier: fixedOdds
+          ? (o.odds === null || o.odds === undefined ? null : Number(o.odds))
+          : Number(o.pool) > 0
+            ? Math.round((totalPool / Number(o.pool)) * 100) / 100
+            : null,
       })),
     };
   });

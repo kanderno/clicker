@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { adminCancelEvent, adminCreateEvent, adminDeleteEvent, adminListEvents, adminResolveEvent } from './api.js';
+import AdminCoins from './AdminCoins.jsx';
 
 const ERRORS = {
   bad_title: 'Название: от 3 до 200 символов',
   bad_options: 'Нужно от 2 до 10 разных вариантов (до 100 символов)',
   bad_deadline: 'Дедлайн должен быть в будущем',
+  bad_odds: 'Коэффициент нужен у каждого варианта: число от 1.01 до 1000',
+  bad_mode: 'Неизвестный режим выплат',
   forbidden: 'Нет доступа',
   event_has_bets: 'На это событие уже есть ставки, удалить нельзя',
   bad_option: 'Такого варианта нет в этом событии',
@@ -27,12 +30,21 @@ const STATUS = {
 const inputCls =
   'w-full rounded-xl bg-slate-900 px-3 py-2.5 text-white outline-none ring-1 ring-slate-700 focus:ring-yellow-400/70';
 
+// Коэффициент: число от 1.01 до 1000, не больше двух знаков после точки.
+const parseOdds = (s) => {
+  const v = Number(String(s).replace(',', '.'));
+  return Number.isFinite(v) && v >= 1.01 && v <= 1000 ? Math.round(v * 100) / 100 : null;
+};
+
 export default function Admin({ active }) {
   const [events, setEvents] = useState(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [deadline, setDeadline] = useState(defaultDeadline);
   const [options, setOptions] = useState(['Да', 'Нет']);
+  // payoutMode: 'odds' — выплата = ставка x коэффициент; 'pool' — тотализатор (банк делится между победителями)
+  const [payoutMode, setPayoutMode] = useState('odds');
+  const [odds, setOdds] = useState(['2', '2']);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null); // { ok, text }
   const [confirmId, setConfirmId] = useState(null);
@@ -53,12 +65,30 @@ export default function Admin({ active }) {
   }, [active, load]);
 
   const setOption = (i, v) => setOptions((o) => o.map((x, j) => (j === i ? v : x)));
+  const setOdd = (i, v) => setOdds((o) => o.map((x, j) => (j === i ? v : x)));
+  // Вариант и его коэффициент добавляются/удаляются вместе, чтобы индексы не разъехались.
+  const addOption = () => {
+    setOptions((x) => [...x, '']);
+    setOdds((x) => [...x, '2']);
+  };
+  const removeOption = (i) => {
+    setOptions((x) => x.filter((_, j) => j !== i));
+    setOdds((x) => x.filter((_, j) => j !== i));
+  };
 
   const create = async () => {
     const when = new Date(deadline);
     if (Number.isNaN(when.getTime())) {
       setMsg({ ok: false, text: 'Укажи дедлайн' });
       return;
+    }
+    let parsedOdds = null;
+    if (payoutMode === 'odds') {
+      parsedOdds = options.map((_, i) => parseOdds(odds[i]));
+      if (parsedOdds.some((x) => x === null)) {
+        setMsg({ ok: false, text: ERRORS.bad_odds });
+        return;
+      }
     }
     setBusy(true);
     setMsg(null);
@@ -68,11 +98,14 @@ export default function Admin({ active }) {
         ...(description.trim() ? { description: description.trim() } : {}),
         deadline: when.toISOString(),
         options: options.map((o) => o.trim()),
+        payoutMode,
+        ...(parsedOdds ? { odds: parsedOdds } : {}),
       });
       setTitle('');
       setDescription('');
       setDeadline(defaultDeadline());
       setOptions(['Да', 'Нет']);
+      setOdds(['2', '2']);
       setMsg({ ok: true, text: 'Событие создано' });
       await load();
     } catch (e) {
@@ -150,13 +183,43 @@ export default function Admin({ active }) {
         </label>
 
         <div className="space-y-2">
-          <p className="text-xs text-slate-400">Варианты исхода (2–10)</p>
+          <p className="text-xs text-slate-400">Как считать выплату</p>
+          <div className="flex gap-2 text-sm">
+            {[
+              ['odds', 'Коэффициенты'],
+              ['pool', 'Тотализатор'],
+            ].map(([v, label]) => (
+              <button key={v} type="button" onClick={() => setPayoutMode(v)}
+                className={`flex-1 rounded-xl py-2 font-semibold ${
+                  payoutMode === v ? 'bg-yellow-400 text-slate-950' : 'bg-slate-900 text-slate-300 active:bg-slate-700'
+                }`}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-slate-500">
+            {payoutMode === 'odds'
+              ? 'Выплата = ставка × коэффициент варианта. Известна игроку заранее; разницу доплачивает казино.'
+              : 'Весь банк события делится между теми, кто угадал, пропорционально ставкам.'}
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-xs text-slate-400">
+            Варианты исхода (2–10){payoutMode === 'odds' ? ' и коэффициенты' : ''}
+          </p>
           {options.map((o, i) => (
             <div key={i} className="flex gap-2">
               <input className={inputCls} placeholder={`Вариант ${i + 1}`} value={o} maxLength={100}
                 onChange={(e) => setOption(i, e.target.value)} />
+              {payoutMode === 'odds' && (
+                <input type="text" inputMode="decimal" aria-label={`Коэффициент варианта ${i + 1}`}
+                  className={`${inputCls} w-24 shrink-0 text-center tabular-nums`} placeholder="2.00"
+                  value={odds[i] ?? ''} maxLength={7}
+                  onChange={(e) => setOdd(i, e.target.value.replace(/[^\d.,]/g, '').slice(0, 7))} />
+              )}
               {options.length > 2 && (
-                <button type="button" onClick={() => setOptions((x) => x.filter((_, j) => j !== i))}
+                <button type="button" onClick={() => removeOption(i)}
                   className="rounded-xl bg-slate-700 px-3 text-slate-300 active:bg-slate-600" aria-label="Убрать">
                   ✕
                 </button>
@@ -164,10 +227,15 @@ export default function Admin({ active }) {
             </div>
           ))}
           {options.length < 10 && (
-            <button type="button" onClick={() => setOptions((x) => [...x, ''])}
+            <button type="button" onClick={addOption}
               className="text-sm text-yellow-400 active:text-yellow-300">
               + добавить вариант
             </button>
+          )}
+          {payoutMode === 'odds' && (
+            <p className="text-xs text-slate-500">
+              Коэффициент от 1.01 до 1000. Ставка 100 при кэфе 1.80 вернёт игроку 180.
+            </p>
           )}
         </div>
 
@@ -177,6 +245,8 @@ export default function Admin({ active }) {
         </button>
         <p className={`h-5 text-center text-sm ${msg?.ok ? 'text-emerald-300' : 'text-red-400'}`}>{msg?.text}</p>
       </div>
+
+      <AdminCoins active={active} />
 
       <p className="mt-6 text-sm font-semibold text-slate-300">События</p>
       {events === null && <p className="mt-3 text-sm text-slate-500">Загрузка…</p>}
@@ -194,15 +264,21 @@ export default function Admin({ active }) {
               {ev.description && <p className="mt-1 text-sm text-slate-400">{ev.description}</p>}
               <p className="mt-2 text-xs text-slate-500">
                 Дедлайн: {new Date(ev.deadline).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })}
+                {' · '}{ev.payout_mode === 'odds' ? 'коэффициенты' : 'тотализатор'}
               </p>
               <ul className="mt-2 space-y-1">
                 {ev.options.map((o) => (
                   <li key={o.id}
-                    className={`flex justify-between rounded-lg px-3 py-1.5 text-sm ${
+                    className={`flex justify-between gap-3 rounded-lg px-3 py-1.5 text-sm ${
                       ev.winning_option_id === o.id ? 'bg-emerald-500/20 ring-1 ring-emerald-500/50' : 'bg-slate-900/60'
                     }`}>
-                    <span>{ev.winning_option_id === o.id ? '✓ ' : ''}{o.title}</span>
-                    <span className="tabular-nums text-slate-400">пул: {Number(o.pool).toLocaleString('ru-RU')}</span>
+                    <span className="truncate">{ev.winning_option_id === o.id ? '✓ ' : ''}{o.title}</span>
+                    <span className="shrink-0 tabular-nums text-slate-400">
+                      {o.odds !== null && o.odds !== undefined && (
+                        <span className="mr-2 text-yellow-300">x{Number(o.odds)}</span>
+                      )}
+                      пул: {Number(o.pool).toLocaleString('ru-RU')}
+                    </span>
                   </li>
                 ))}
               </ul>

@@ -54,6 +54,16 @@ export const adminCreateEvent = (payload) =>
   request('/admin/events', { method: 'POST', body: JSON.stringify(payload) });
 export const adminDeleteEvent = (id) => request(`/admin/events/${id}`, { method: 'DELETE' });
 
+// Монеты игрокам (только админ)
+export const adminSearchUsers = (q = '') =>
+  request(`/admin/users${q ? `?q=${encodeURIComponent(q)}` : ''}`);
+export const adminGrantCoins = (userId, amount, reason) =>
+  request(`/admin/users/${userId}/coins`, {
+    method: 'POST',
+    body: JSON.stringify({ amount, ...(reason ? { reason } : {}) }),
+  });
+export const adminCoinsHistory = () => request('/admin/coins/history');
+
 // ---------- Предсказания ----------
 export const getEvents = () => request('/events');
 export const placeBet = (eventId, optionId, amount) =>

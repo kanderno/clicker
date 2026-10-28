@@ -550,7 +550,7 @@ app.get('/bets/mine', { preHandler: app.authenticate }, async (req, reply) => {
 
 // ---------- Админка: предсказания ----------
 const adminOnly = [app.authenticate, app.requireAdmin];
-const EVENT_ERRORS = ['bad_title', 'bad_options', 'bad_deadline'];
+const EVENT_ERRORS = ['bad_title', 'bad_options', 'bad_deadline', 'bad_odds', 'bad_mode'];
 
 app.get('/admin/events', { preHandler: adminOnly }, async (req, reply) => {
   const { events, error } = await listEventsWithOptions(supabase);
@@ -574,17 +574,27 @@ app.post(
           description: { type: 'string', maxLength: 1000 },
           deadline: { type: 'string', format: 'date-time' },
           options: { type: 'array', minItems: 2, maxItems: 10, items: { type: 'string', minLength: 1, maxLength: 100 } },
+          // 'pool' — тотализатор (как раньше), 'odds' — фиксированные коэффициенты
+          payoutMode: { type: 'string', enum: ['pool', 'odds'] },
+          // Коэффициенты: по одному на вариант, нужны только при payoutMode = 'odds'
+          odds: { type: 'array', minItems: 2, maxItems: 10, items: { type: 'number', minimum: 1.01, maximum: 1000 } },
         },
       },
     },
   },
   async (req, reply) => {
-    const { title, description, deadline, options } = req.body;
+    const { title, description, deadline, options, payoutMode = 'pool', odds } = req.body;
+    // Длину массивов проверяет и SQL (bad_odds), здесь — чтобы не ходить в БД зря.
+    if (payoutMode === 'odds' && (!odds || odds.length !== options.length)) {
+      return reply.code(400).send({ error: 'bad_odds' });
+    }
     const { data, error } = await supabase.rpc('admin_create_event', {
       p_title: title,
       p_description: description ?? null,
       p_deadline: deadline,
       p_options: options,
+      p_mode: payoutMode,
+      p_odds: payoutMode === 'odds' ? odds : null,
     });
     if (error) {
       const code = EVENT_ERRORS.find((c) => error.message?.includes(c));
@@ -598,7 +608,7 @@ app.post(
 
 // Закрытие события: выплаты или возврат считаются внутри SQL-функции одной транзакцией.
 // Повторный вызов безопасен: changed = false, ничего не меняется.
-const RESOLVE_ERRORS = ['bad_option', 'event_not_found'];
+const RESOLVE_ERRORS = ['bad_option', 'bad_odds', 'event_not_found'];
 async function resolveEvent(req, reply, optionId) {
   const { data, error } = await supabase.rpc('admin_resolve_event', {
     p_event: req.params.id,
@@ -662,6 +672,124 @@ app.delete(
     return { ok: true };
   },
 );
+
+// ---------- Админка: монеты игрокам ----------
+const GRANT_ERRORS = ['bad_amount', 'bad_reason', 'user_not_found', 'admin_not_found', 'insufficient_funds'];
+
+// Поиск игрока по имени, нику или Telegram ID. Без запроса — последние зарегистрировавшиеся.
+app.get(
+  '/admin/users',
+  {
+    preHandler: adminOnly,
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: {
+          q: { type: 'string', maxLength: 64 },
+          limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 },
+        },
+      },
+    },
+  },
+  async (req, reply) => {
+    // В фильтре PostgREST запятые и скобки — разделители, поэтому из запроса их вырезаем.
+    const term = (req.query.q ?? '').trim().replace(/[%,()\\'"*]/g, '');
+    let q = supabase
+      .from('users')
+      .select(USER_FIELDS)
+      .order('id', { ascending: false })
+      .limit(req.query.limit);
+    if (term) {
+      const filters = [`username.ilike.%${term}%`, `first_name.ilike.%${term}%`];
+      if (/^\d+$/.test(term)) filters.push(`telegram_id.eq.${term}`);
+      q = q.or(filters.join(','));
+    }
+    const { data, error } = await q;
+    if (error) {
+      req.log.error(error, 'admin users search failed');
+      return reply.code(500).send({ error: 'db_error' });
+    }
+    return { users: data };
+  },
+);
+
+// Начислить (amount > 0) или списать (amount < 0) монеты игроку.
+// Всё внутри SQL-функции: баланс, запись в ledger и журнал начислений — одной транзакцией.
+app.post(
+  '/admin/users/:id/coins',
+  {
+    preHandler: adminOnly,
+    config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+    schema: {
+      params: idParams,
+      body: {
+        type: 'object',
+        required: ['amount'],
+        properties: {
+          amount: { type: 'integer', minimum: -1000000000000, maximum: 1000000000000 },
+          reason: { type: 'string', maxLength: 200 },
+        },
+      },
+    },
+  },
+  async (req, reply) => {
+    if (req.body.amount === 0) return reply.code(400).send({ error: 'bad_amount' });
+    const { data, error } = await supabase.rpc('admin_grant_coins', {
+      p_admin: req.user.uid,
+      p_user: req.params.id,
+      p_amount: req.body.amount,
+      p_reason: req.body.reason ?? null,
+    });
+    if (error || !data?.length) {
+      const code = GRANT_ERRORS.find((c) => error?.message?.includes(c));
+      if (code) return reply.code(code === 'user_not_found' ? 404 : 400).send({ error: code });
+      req.log.error(error, 'admin_grant_coins failed');
+      return reply.code(500).send({ error: 'db_error' });
+    }
+    req.log.info(
+      { admin: req.user.tg, user: req.params.id, amount: req.body.amount, grant: data[0].grant_id },
+      'admin coins granted',
+    );
+    return { balance: data[0].new_balance, grantId: data[0].grant_id };
+  },
+);
+
+// История ручных начислений: видно, кто и кому выдал монеты.
+app.get('/admin/coins/history', { preHandler: adminOnly }, async (req, reply) => {
+  const { data: grants, error } = await supabase
+    .from('admin_grants')
+    .select('id, admin_id, user_id, amount, reason, balance_after, created_at')
+    .order('id', { ascending: false })
+    .limit(30);
+  if (error) {
+    req.log.error(error, 'admin grants list failed');
+    return reply.code(500).send({ error: 'db_error' });
+  }
+  if (!grants.length) return { grants: [] };
+
+  // Два FK на users (admin_id и user_id): вложенный select PostgREST не разрешает, грузим отдельно.
+  const ids = [...new Set(grants.flatMap((g) => [g.admin_id, g.user_id]))];
+  const { data: users, error: uErr } = await supabase
+    .from('users')
+    .select('id, telegram_id, username, first_name')
+    .in('id', ids);
+  if (uErr) {
+    req.log.error(uErr, 'admin grants users failed');
+    return reply.code(500).send({ error: 'db_error' });
+  }
+  const byId = new Map(users.map((u) => [u.id, u]));
+  return {
+    grants: grants.map((g) => ({
+      id: g.id,
+      amount: Number(g.amount),
+      reason: g.reason,
+      balanceAfter: Number(g.balance_after),
+      createdAt: g.created_at,
+      admin: byId.get(g.admin_id) ?? null,
+      user: byId.get(g.user_id) ?? null,
+    })),
+  };
+});
 
 // ---------- Mini App: раздача собранного фронтенда ----------
 // В Docker фронт собирается в /usr/src/app/frontend/dist (вне /app, чтобы bind mount Bothost его не затёр).

@@ -77,6 +77,38 @@ test('toPlayerView: множители, пул, моя ставка, стату�
   assert.deepEqual(b.options.map((o) => o.multiplier), [null, null]); // пустые пулы, без деления на 0
 });
 
+test('toPlayerView: режим коэффициентов — множитель берётся из кэфа варианта, не из банка', () => {
+  const [e] = toPlayerView(
+    [{
+      id: 1, title: 'A', deadline: '2030-01-01T00:00:00Z', payout_mode: 'odds',
+      options: [{ id: 1, title: 'Да', pool: 1000, odds: '1.80' }, { id: 2, title: 'Нет', pool: 0, odds: 3 }],
+    }],
+    new Map(),
+  );
+  assert.equal(e.payoutMode, 'odds');
+  assert.deepEqual(e.options.map((o) => o.multiplier), [1.8, 3]); // банк на кэф не влияет
+  assert.equal(e.totalPool, 1000);
+});
+
+test('toPlayerView: без кэфа в режиме коэффициентов множитель null, а не NaN', () => {
+  const [e] = toPlayerView(
+    [{ id: 1, title: 'A', deadline: '2030-01-01T00:00:00Z', payout_mode: 'odds',
+      options: [{ id: 1, title: 'Да', pool: 100, odds: null }] }],
+    new Map(),
+  );
+  assert.equal(e.options[0].multiplier, null);
+});
+
+test('toPlayerView: старые события без payout_mode считаются тотализатором', () => {
+  const [e] = toPlayerView(
+    [{ id: 1, title: 'A', deadline: '2030-01-01T00:00:00Z',
+      options: [{ id: 1, title: 'Да', pool: 300 }, { id: 2, title: 'Нет', pool: 100 }] }],
+    new Map(),
+  );
+  assert.equal(e.payoutMode, 'pool');
+  assert.deepEqual(e.options.map((o) => o.multiplier), [1.33, 4]);
+});
+
 test('toPlayerView: пулы из БД (bigint строкой) приводятся к числу', () => {
   const [e] = toPlayerView(
     [{ id: 1, title: 'A', deadline: '2030-01-01T00:00:00Z', options: [{ id: 1, title: 'x', pool: '250' }] }],
