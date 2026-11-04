@@ -6,7 +6,7 @@ import { centerAngle, formatCountdown, labelFontSize, nextRotation, sectorPath }
 
 const SPIN_MS = 4200;
 // 10 цветов: при 9 секторах первый и последний (они соседи) не совпадают
-const COLORS = ['#f59e0b', '#10b981', '#3b82f6', '#a855f7', '#ef4444', '#14b8a6', '#eab308', '#6366f1', '#f97316', '#ec4899'];
+const COLORS = ['#ffc62e', '#22b573', '#3f8fd6', '#a06ad4', '#e05a52', '#1fa8a1', '#f0b429', '#5b74c9', '#e8843c', '#c0578f'];
 const fmt = (n) => Number(n).toLocaleString('ru-RU');
 
 const ERRORS = {
@@ -103,10 +103,10 @@ export default function Wheel({ active, balance, onBalance }) {
       <div className="relative mx-auto mt-6 h-72 w-72">
         {/* указатель */}
         <div className="absolute left-1/2 top-[-6px] z-10 -translate-x-1/2"
-          style={{ width: 0, height: 0, borderLeft: '14px solid transparent', borderRight: '14px solid transparent', borderTop: '26px solid #f8fafc', filter: 'drop-shadow(0 2px 3px rgba(0,0,0,.5))' }} />
+          style={{ width: 0, height: 0, borderLeft: '14px solid transparent', borderRight: '14px solid transparent', borderTop: '26px solid #ffc62e', filter: 'drop-shadow(0 2px 3px rgba(0,0,0,.5))' }} />
         <svg viewBox="0 0 300 300" className="h-full w-full drop-shadow-[0_0_30px_rgba(251,191,36,0.25)]"
           style={{ transform: `rotate(${rotation}deg)`, transition: `transform ${SPIN_MS}ms cubic-bezier(0.12, 0.6, 0.1, 1)` }}>
-          <circle cx="150" cy="150" r="146" fill="#fff8dd" stroke="#d5ad31" strokeWidth="4" />
+          <circle cx="150" cy="150" r="146" fill="#0f1b2d" stroke="#d5ad31" strokeWidth="4" />
           {n === 0 && <text x="150" y="155" textAnchor="middle" fill="#64748b" fontSize="14">загрузка…</text>}
           {prizes.map((p, i) => (
             <g key={p.id}>
@@ -120,7 +120,7 @@ export default function Wheel({ active, balance, onBalance }) {
               </text>
             </g>
           ))}
-          <circle cx="150" cy="150" r="22" fill="#fff8dd" stroke="#d5ad31" strokeWidth="4" />
+          <circle cx="150" cy="150" r="22" fill="#14243c" stroke="#ffc62e" strokeWidth="4" />
         </svg>
       </div>
 

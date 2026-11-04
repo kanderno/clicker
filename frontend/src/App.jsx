@@ -9,12 +9,51 @@ import Admin from './Admin.jsx';
 import { userLabel } from './Transfer.jsx';
 
 const BASE_TABS = [
-  { id: 'game', label: 'Играть', icon: '✦' },
-  { id: 'bets', label: 'Прогнозы', icon: '◉' },
-  { id: 'wheel', label: 'Колесо', icon: '◎' },
-  { id: 'miners', label: 'Майнеры', icon: '↗' },
-  { id: 'bank', label: 'Банк', icon: '▣' },
+  { id: 'game', label: 'Играть', icon: 'game' },
+  { id: 'bets', label: 'Прогнозы', icon: 'bets' },
+  { id: 'wheel', label: 'Колесо', icon: 'wheel' },
+  { id: 'miners', label: 'Майнеры', icon: 'miners' },
+  { id: 'bank', label: 'Банк', icon: 'bank' },
 ];
+
+const ICONS = {
+  game: (
+    <>
+      <circle cx="12" cy="12" r="8.6" />
+      <path d="M12 6.9v10.2M9.7 9.7h3.5a1.75 1.75 0 010 3.5H9.7" />
+    </>
+  ),
+  bets: <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />,
+  wheel: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 3v6M12 15v6M3 12h6M15 12h6" />
+    </>
+  ),
+  miners: (
+    <>
+      <path d="M5 15c-1.5 1.5-2 5-2 5s3.5-.5 5-2c.9-.9.9-2.3 0-3.2-.9-.9-2.3-.8-3 .2Z" />
+      <path d="M9 14.5 6.5 12c.8-4.2 3.5-8 9.5-9 1 6-.8 9.7-5 11.5Z" />
+      <circle cx="14.5" cy="8.5" r="1.6" />
+    </>
+  ),
+  bank: <path d="M3 9.5 12 4l9 5.5M4 9.5V20M20 9.5V20M2 20h20M8 20v-7M16 20v-7M12 20v-7" />,
+  admin: (
+    <>
+      <circle cx="12" cy="12" r="3.2" />
+      <path d="M19.4 15a1.7 1.7 0 00.3 1.9l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.9-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.9.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.9 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.9l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.9.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.9-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.9V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1Z" />
+    </>
+  ),
+};
+
+function TabIcon({ id }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {ICONS[id]}
+    </svg>
+  );
+}
 
 function Main({ user }) {
   const [tab, setTab] = useState('game');
@@ -23,7 +62,7 @@ function Main({ user }) {
   const [theft, setTheft] = useState(null); // { count, total, upToId }: показываем жертве, что у неё украли
   const [gift, setGift] = useState(null); // { list, upToId }: входящие переводы от других игроков
   // Вкладка админа только для админов. Настоящая защита на сервере (403), это лишь интерфейс.
-  const tabs = user.isAdmin ? [...BASE_TABS, { id: 'admin', label: 'Админ', icon: '⌘' }] : BASE_TABS;
+  const tabs = user.isAdmin ? [...BASE_TABS, { id: 'admin', label: 'Админ', icon: 'admin' }] : BASE_TABS;
 
   const checkThefts = useCallback(async () => {
     try {
@@ -163,7 +202,11 @@ function Main({ user }) {
         </div>
       )}
 
-      <nav className="app-nav" aria-label="Разделы приложения" style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>
+      <nav
+        className={`app-nav ${tabs.length > 5 ? 'is-dense' : ''}`}
+        aria-label="Разделы приложения"
+        style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
+      >
         {tabs.map((t) => (
           <button
             key={t.id}
@@ -172,7 +215,7 @@ function Main({ user }) {
             aria-current={tab === t.id ? 'page' : undefined}
             className={`app-nav-item ${tab === t.id ? 'is-active' : ''}`}
           >
-            <span className="nav-icon" aria-hidden="true">{t.icon}</span>
+            <span className="nav-icon"><TabIcon id={t.icon} /></span>
             <span>{t.label}</span>
           </button>
         ))}

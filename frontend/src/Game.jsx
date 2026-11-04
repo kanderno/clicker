@@ -86,10 +86,10 @@ const Game = forwardRef(function Game({ user, balance, onBalance }, ref) {
     <div className="game-screen">
       <header className="game-header">
         <div className="brand-lockup">
-          <span className="app-mark" aria-hidden="true">✦</span>
+          <span className="app-mark" aria-hidden="true">PM</span>
           <span>
-            <span className="brand-title">ТАП-КЛУБ</span>
-            <span className="brand-caption">СОБИРАЙ МОНЕТЫ</span>
+            <span className="brand-title">PELMEN MARKET</span>
+            <span className="brand-caption">ПЕЛЬМЕННЫЙ ЦЕХ</span>
           </span>
         </div>
         <span className="player-avatar" title={playerName}>{playerInitial}</span>
@@ -115,14 +115,13 @@ const Game = forwardRef(function Game({ user, balance, onBalance }, ref) {
       </section>
 
       <div ref={areaRef} className="coin-stage">
-        <span className="coin-orbit" aria-hidden="true" />
         <span className="coin-halo" aria-hidden="true" />
         <button
           type="button"
           onPointerDown={onTap}
           className="coin-tap-button"
           style={{ touchAction: 'manipulation' }}
-          aria-label="Нажать на монету и заработать одну монету"
+          aria-label="Нажать на пелькоин и заработать одну монету"
         >
           <Coin className="coin-art pointer-events-none" />
         </button>
@@ -138,7 +137,7 @@ const Game = forwardRef(function Game({ user, balance, onBalance }, ref) {
       </div>
 
       <div className="tap-copy">
-        <strong>Нажми на монету</strong>
+        <strong>Нажми на пелькоин</strong>
         <span>Каждый тап приближает к награде</span>
       </div>
 
@@ -147,6 +146,13 @@ const Game = forwardRef(function Game({ user, balance, onBalance }, ref) {
         <span><strong>1 тап = 1 монета</strong><small>Баланс синхронизируется автоматически</small></span>
         <span className="note-arrow" aria-hidden="true">↗</span>
       </div>
+
+      <footer className="game-credits">
+        <p>Concept: Ilyas Upushev, 2026</p>
+        <p>Project leader: Ilyas, Alex, Michael</p>
+        <p>Dev. Ilyas, Alex, Mansur</p>
+        <p className="game-credits-copy">©️ 2026 Pelmen Coins Bot. All rights reserved. Not a p2p market!</p>
+      </footer>
     </div>
   );
 });
