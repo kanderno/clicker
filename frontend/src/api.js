@@ -89,6 +89,18 @@ export const getUnseenSteals = () => request('/steals/unseen');
 export const markStealsSeen = (upToId) =>
   request('/steals/seen', { method: 'POST', body: JSON.stringify({ upToId }) });
 
+// ---------- Переводы между игроками ----------
+export const searchUsers = (q) => request(`/users/search?q=${encodeURIComponent(q)}`);
+export const sendTransfer = (toId, amount, comment) =>
+  request('/transfer', {
+    method: 'POST',
+    body: JSON.stringify({ toId, amount, ...(comment ? { comment } : {}) }),
+  });
+export const getTransfers = () => request('/transfers');
+export const getUnseenTransfers = () => request('/transfers/unseen');
+export const markTransfersSeen = (upToId) =>
+  request('/transfers/seen', { method: 'POST', body: JSON.stringify({ upToId }) });
+
 // ---------- Майнеры ----------
 export const getMiners = () => request('/miners');
 export const buildMiner = (typeId) => request('/miners/build', { method: 'POST', body: JSON.stringify({ typeId }) });

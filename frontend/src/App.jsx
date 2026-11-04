@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getUnseenSteals, login, markStealsSeen } from './api.js';
+import { getUnseenSteals, getUnseenTransfers, login, markStealsSeen, markTransfersSeen } from './api.js';
 import Game from './Game.jsx';
 import Bank from './Bank.jsx';
 import Predictions from './Predictions.jsx';
 import Wheel from './Wheel.jsx';
 import Miners from './Miners.jsx';
 import Admin from './Admin.jsx';
+import { userLabel } from './Transfer.jsx';
 
 const BASE_TABS = [
   { id: 'game', label: 'Играть', icon: '✦' },
@@ -20,6 +21,7 @@ function Main({ user }) {
   const [balance, setBalance] = useState(user.balance); // баланс всегда приходит с сервера
   const gameRef = useRef(null);
   const [theft, setTheft] = useState(null); // { count, total, upToId }: показываем жертве, что у неё украли
+  const [gift, setGift] = useState(null); // { list, upToId }: входящие переводы от других игроков
   // Вкладка админа только для админов. Настоящая защита на сервере (403), это лишь интерфейс.
   const tabs = user.isAdmin ? [...BASE_TABS, { id: 'admin', label: 'Админ', icon: '⌘' }] : BASE_TABS;
 
@@ -39,16 +41,32 @@ function Main({ user }) {
     }
   }, []);
 
+  const checkTransfers = useCallback(async () => {
+    try {
+      const r = await getUnseenTransfers();
+      if (r.transfers.length) {
+        setBalance(r.balance); // монеты уже зачислены на сервере
+        setGift({ list: r.transfers, upToId: Math.max(...r.transfers.map((x) => x.id)) });
+      }
+    } catch {
+      /* уведомление не критично: попробуем в следующий раз */
+    }
+  }, []);
+
   useEffect(() => {
-    checkThefts();
-    const t = setInterval(checkThefts, 45000);
-    const onVisible = () => document.visibilityState === 'visible' && checkThefts();
+    const check = () => {
+      checkThefts();
+      checkTransfers();
+    };
+    check();
+    const t = setInterval(check, 45000);
+    const onVisible = () => document.visibilityState === 'visible' && check();
     document.addEventListener('visibilitychange', onVisible);
     return () => {
       clearInterval(t);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [checkThefts]);
+  }, [checkThefts, checkTransfers]);
 
   const dismissTheft = async () => {
     const { upToId } = theft;
@@ -57,6 +75,16 @@ function Main({ user }) {
       await markStealsSeen(upToId);
     } catch {
       /* если не получилось, покажем снова: лучше повтор, чем потерянное уведомление */
+    }
+  };
+
+  const dismissGift = async () => {
+    const { upToId } = gift;
+    setGift(null);
+    try {
+      await markTransfersSeen(upToId);
+    } catch {
+      /* если не получилось, покажем снова */
     }
   };
 
@@ -106,6 +134,30 @@ function Main({ user }) {
             <button type="button" onClick={dismissTheft}
               className="mt-5 w-full rounded-xl bg-yellow-400 py-3 font-semibold text-slate-950 active:bg-yellow-300">
               Понятно
+            </button>
+          </div>
+        </div>
+      )}
+
+      {gift && !theft && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 px-6 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl bg-slate-800 p-6 text-center text-white shadow-2xl ring-1 ring-emerald-500/40">
+            <p className="text-xl font-bold text-emerald-400">Тебе перевели монеты!</p>
+            <div className="mt-3 max-h-60 space-y-2 overflow-y-auto">
+              {gift.list.map((t) => (
+                <div key={t.id} className="rounded-xl bg-slate-900/70 px-3 py-2 text-sm">
+                  <p>
+                    <b className="text-yellow-300">{userLabel(t.from)}</b>
+                    <span className="text-slate-300"> → </span>
+                    <b className="tabular-nums text-emerald-300">+{t.amount.toLocaleString('ru-RU')}</b>
+                  </p>
+                  {t.comment && <p className="mt-0.5 break-words text-xs text-slate-400">«{t.comment}»</p>}
+                </div>
+              ))}
+            </div>
+            <button type="button" onClick={dismissGift}
+              className="mt-5 w-full rounded-xl bg-yellow-400 py-3 font-semibold text-slate-950 active:bg-yellow-300">
+              Отлично
             </button>
           </div>
         </div>

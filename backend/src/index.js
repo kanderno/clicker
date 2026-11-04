@@ -382,6 +382,177 @@ app.post(
   },
 );
 
+// ---------- Переводы между игроками ----------
+const TRANSFER_ERRORS = [
+  'bad_amount', 'bad_comment', 'self_transfer', 'insufficient_funds',
+  'daily_limit', 'recipient_not_found', 'user_not_found',
+];
+const PUBLIC_USER_FIELDS = 'id, username, first_name'; // баланс и Telegram ID чужим игрокам не отдаём
+const transferLimit = { rateLimit: { max: 30, timeWindow: '1 minute' } };
+
+// Поиск получателя по @нику или имени. Минимум 2 символа: список всех игроков целиком не выдаём.
+app.get(
+  '/users/search',
+  {
+    preHandler: app.authenticate,
+    config: transferLimit,
+    schema: {
+      querystring: {
+        type: 'object',
+        required: ['q'],
+        properties: { q: { type: 'string', minLength: 1, maxLength: 64 } },
+      },
+    },
+  },
+  async (req, reply) => {
+    // В фильтре PostgREST запятые и скобки — разделители, поэтому из запроса их вырезаем.
+    const term = req.query.q.trim().replace(/^@/, '').replace(/[%,()\\'"*]/g, '');
+    if (term.length < 2) return { users: [] };
+    const { data, error } = await supabase
+      .from('users')
+      .select(PUBLIC_USER_FIELDS)
+      .or(`username.ilike.%${term}%,first_name.ilike.%${term}%`)
+      .neq('id', req.user.uid)
+      .order('id', { ascending: true })
+      .limit(20);
+    if (error) {
+      req.log.error(error, 'users search failed');
+      return reply.code(500).send({ error: 'db_error' });
+    }
+    return { users: data };
+  },
+);
+
+app.post(
+  '/transfer',
+  {
+    preHandler: app.authenticate,
+    config: transferLimit,
+    schema: {
+      body: {
+        type: 'object',
+        required: ['toId', 'amount'],
+        properties: {
+          toId: { type: 'integer', minimum: 1 },
+          amount: { type: 'integer', minimum: 1, maximum: 1000000000000 },
+          comment: { type: 'string', maxLength: 100 },
+        },
+      },
+    },
+  },
+  async (req, reply) => {
+    // Отправитель берётся только из JWT: перевести чужие монеты нельзя.
+    const { data, error } = await supabase.rpc('transfer_coins', {
+      p_from: req.user.uid,
+      p_to: req.body.toId,
+      p_amount: req.body.amount,
+      p_comment: req.body.comment ?? null,
+    });
+    if (error || !data?.length) {
+      const code = TRANSFER_ERRORS.find((c) => error?.message?.includes(c));
+      if (code) return reply.code(code === 'recipient_not_found' ? 404 : 400).send({ error: code });
+      req.log.error(error, 'transfer_coins failed');
+      return reply.code(500).send({ error: 'db_error' });
+    }
+    return { balance: data[0].new_balance, transferId: data[0].transfer_id };
+  },
+);
+
+async function loadTransferUsers(rows) {
+  const ids = [...new Set(rows.flatMap((t) => [t.from_id, t.to_id]))];
+  if (!ids.length) return { byId: new Map() };
+  const { data, error } = await supabase.from('users').select(PUBLIC_USER_FIELDS).in('id', ids);
+  return { byId: new Map((data ?? []).map((u) => [u.id, u])), error };
+}
+
+// История: последние входящие и исходящие переводы.
+app.get('/transfers', { preHandler: app.authenticate }, async (req, reply) => {
+  const uid = req.user.uid;
+  const { data: rows, error } = await supabase
+    .from('transfers')
+    .select('id, from_id, to_id, amount, comment, created_at')
+    .or(`from_id.eq.${uid},to_id.eq.${uid}`)
+    .order('id', { ascending: false })
+    .limit(30);
+  if (error) {
+    req.log.error(error, 'transfers list failed');
+    return reply.code(500).send({ error: 'db_error' });
+  }
+  const { byId, error: uErr } = await loadTransferUsers(rows);
+  if (uErr) {
+    req.log.error(uErr, 'transfers users failed');
+    return reply.code(500).send({ error: 'db_error' });
+  }
+  return {
+    transfers: rows.map((t) => {
+      const outgoing = t.from_id === uid;
+      return {
+        id: t.id,
+        outgoing,
+        amount: Number(t.amount),
+        comment: t.comment,
+        createdAt: t.created_at,
+        other: byId.get(outgoing ? t.to_id : t.from_id) ?? null,
+      };
+    }),
+  };
+});
+
+// Уведомления о входящих переводах (как у краж, но отправитель виден).
+app.get('/transfers/unseen', { preHandler: app.authenticate }, async (req, reply) => {
+  const [rowsRes, meRes] = await Promise.all([
+    supabase
+      .from('transfers')
+      .select('id, from_id, to_id, amount, comment')
+      .eq('to_id', req.user.uid)
+      .eq('seen', false)
+      .order('id', { ascending: true })
+      .limit(50),
+    supabase.from('users').select('balance').eq('id', req.user.uid).single(),
+  ]);
+  if (rowsRes.error || meRes.error) {
+    req.log.error(rowsRes.error || meRes.error, 'unseen transfers failed');
+    return reply.code(500).send({ error: 'db_error' });
+  }
+  const { byId, error: uErr } = await loadTransferUsers(rowsRes.data);
+  if (uErr) {
+    req.log.error(uErr, 'unseen transfers users failed');
+    return reply.code(500).send({ error: 'db_error' });
+  }
+  return {
+    balance: meRes.data.balance,
+    transfers: rowsRes.data.map((t) => ({
+      id: t.id,
+      amount: Number(t.amount),
+      comment: t.comment,
+      from: byId.get(t.from_id) ?? null,
+    })),
+  };
+});
+
+app.post(
+  '/transfers/seen',
+  {
+    preHandler: app.authenticate,
+    schema: {
+      body: { type: 'object', required: ['upToId'], properties: { upToId: { type: 'integer', minimum: 1 } } },
+    },
+  },
+  async (req, reply) => {
+    const { error } = await supabase
+      .from('transfers')
+      .update({ seen: true })
+      .eq('to_id', req.user.uid)
+      .eq('seen', false)
+      .lte('id', req.body.upToId);
+    if (error) {
+      req.log.error(error, 'mark transfers seen failed');
+      return reply.code(500).send({ error: 'db_error' });
+    }
+    return { ok: true };
+  },
+);
+
 // ---------- Предсказания (для игроков) ----------
 const BET_ERRORS = [
   'event_closed', 'event_not_found', 'bad_option', 'insufficient_funds',
