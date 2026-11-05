@@ -104,101 +104,114 @@ export default function Transfer({ active, wallet, onDone }) {
   };
 
   return (
-    <div className="mt-5 space-y-3 rounded-2xl bg-slate-800/70 p-4">
-      <p className="text-sm font-semibold text-slate-300">Перевод игроку</p>
+    <div className="h-full overflow-y-auto px-4 py-6 text-white">
+      <h1 className="text-center text-xl font-bold">Переводы</h1>
+      <p className="mt-1 text-center text-sm text-slate-400">
+        В кошельке: <b className="tabular-nums text-yellow-400">{wallet != null ? fmt(wallet) : '…'}</b>
+      </p>
 
-      {selected ? (
-        <div className="flex items-center justify-between rounded-xl bg-yellow-400/15 px-3 py-2.5 ring-1 ring-yellow-400/60">
-          <span className="truncate text-sm">
-            Кому: <b className="text-yellow-300">{userLabel(selected)}</b>
-          </span>
-          <button type="button" onClick={() => { setSelected(null); setConfirm(false); }}
-            className="shrink-0 pl-3 text-xs text-slate-400 active:text-white">
-            сменить
-          </button>
-        </div>
-      ) : (
-        <>
-          <input className={inputCls} placeholder="Ник получателя, например @nickname"
-            value={query} maxLength={64} onChange={(e) => setQuery(e.target.value)} />
-          {query.trim().replace(/^@/, '').length >= 2 && !searching && users.length === 0 && (
-            <p className="text-sm text-slate-500">Никого не нашлось</p>
-          )}
-          <div className="max-h-52 space-y-1.5 overflow-y-auto">
-            {users.map((u) => (
-              <button key={u.id} type="button" onClick={() => pick(u)}
-                className="flex w-full items-center rounded-xl bg-slate-900/70 px-3 py-2 text-left text-sm active:bg-slate-700">
-                <span className="truncate">
-                  {u.username ? <b className="text-yellow-300">@{u.username}</b> : <span className="text-slate-500">без ника</span>}
-                  {u.first_name && <span className="ml-2 text-slate-400">{u.first_name}</span>}
-                </span>
-              </button>
-            ))}
+      <div className="mt-5 space-y-3 rounded-2xl bg-slate-800/70 p-4">
+        <p className="text-sm font-semibold text-slate-300">Перевод игроку</p>
+
+        {selected ? (
+          <div className="flex items-center justify-between rounded-xl bg-yellow-400/15 px-3 py-2.5 ring-1 ring-yellow-400/60">
+            <span className="truncate text-sm">
+              Кому: <b className="text-yellow-300">{userLabel(selected)}</b>
+            </span>
+            <button type="button" onClick={() => { setSelected(null); setConfirm(false); }}
+              className="shrink-0 pl-3 text-xs text-slate-400 active:text-white">
+              сменить
+            </button>
           </div>
-        </>
-      )}
-
-      {selected && (
-        <>
-          <input type="text" inputMode="numeric" className={inputCls} placeholder="Сколько монет"
-            value={amount}
-            onChange={(e) => { setAmount(e.target.value.replace(/\D/g, '').slice(0, 12)); setConfirm(false); }} />
-          <div className="flex flex-wrap gap-2 text-xs">
-            {[100, 1000, 10000].map((v) => (
-              <button key={v} type="button" onClick={() => { setAmount(String(v)); setConfirm(false); }}
-                className="rounded-lg bg-slate-700/60 px-3 py-1.5 text-slate-300 active:bg-slate-600">
-                {fmt(v)}
-              </button>
-            ))}
-            {wallet != null && (
-              <button type="button" onClick={() => { setAmount(String(wallet)); setConfirm(false); }}
-                className="rounded-lg bg-slate-700/60 px-3 py-1.5 text-slate-300 active:bg-slate-600">
-                весь кошелёк
-              </button>
+        ) : (
+          <>
+            <input className={inputCls} placeholder="Ник получателя, например @nickname"
+              value={query} maxLength={64} onChange={(e) => setQuery(e.target.value)} />
+            {query.trim().replace(/^@/, '').length >= 2 && !searching && users.length === 0 && (
+              <p className="text-sm text-slate-500">Никого не нашлось</p>
             )}
-          </div>
-          <input className={inputCls} placeholder="Комментарий (необязательно)"
-            value={comment} maxLength={100} onChange={(e) => setComment(e.target.value)} />
-
-          <button type="button" disabled={busy || !valid} onClick={submit}
-            className={`w-full rounded-xl py-3 font-semibold disabled:opacity-50 ${
-              confirm ? 'bg-emerald-500 text-slate-950 active:bg-emerald-400' : 'bg-yellow-400 text-slate-950 active:bg-yellow-300'
-            }`}>
-            {confirm
-              ? `Подтвердить: ${fmt(value || 0)} → ${userLabel(selected)}`
-              : `Перевести ${fmt(value || 0)}`}
-          </button>
-          {confirm && (
-            <p className="text-center text-xs text-amber-300">Перевод нельзя отменить. Проверь ник получателя.</p>
-          )}
-        </>
-      )}
-
-      <p className={`h-5 text-center text-sm ${msg?.ok ? 'text-emerald-300' : 'text-red-400'}`}>{msg?.text}</p>
-
-      {history.length > 0 && (
-        <div className="border-t border-slate-700/60 pt-3">
-          <p className="text-xs text-slate-400">История переводов</p>
-          <div className="mt-2 space-y-1.5">
-            {history.map((t) => (
-              <div key={t.id} className="rounded-lg bg-slate-900/60 px-3 py-2 text-xs">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="truncate text-slate-300">
-                    {t.outgoing ? '→ ' : '← '}{userLabel(t.other)}
+            <div className="max-h-52 space-y-1.5 overflow-y-auto">
+              {users.map((u) => (
+                <button key={u.id} type="button" onClick={() => pick(u)}
+                  className="flex w-full items-center rounded-xl bg-slate-900/70 px-3 py-2 text-left text-sm active:bg-slate-700">
+                  <span className="truncate">
+                    {u.username ? <b className="text-yellow-300">@{u.username}</b> : <span className="text-slate-500">без ника</span>}
+                    {u.first_name && <span className="ml-2 text-slate-400">{u.first_name}</span>}
                   </span>
-                  <span className={`shrink-0 tabular-nums font-semibold ${t.outgoing ? 'text-red-300' : 'text-emerald-300'}`}>
-                    {t.outgoing ? '−' : '+'}{fmt(t.amount)}
-                  </span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {selected && (
+          <>
+            <input type="text" inputMode="numeric" className={inputCls} placeholder="Сколько монет"
+              value={amount}
+              onChange={(e) => { setAmount(e.target.value.replace(/\D/g, '').slice(0, 12)); setConfirm(false); }} />
+            <div className="flex flex-wrap gap-2 text-xs">
+              {[100, 1000, 10000].map((v) => (
+                <button key={v} type="button" onClick={() => { setAmount(String(v)); setConfirm(false); }}
+                  className="rounded-lg bg-slate-700/60 px-3 py-1.5 text-slate-300 active:bg-slate-600">
+                  {fmt(v)}
+                </button>
+              ))}
+              {wallet != null && (
+                <button type="button" onClick={() => { setAmount(String(wallet)); setConfirm(false); }}
+                  className="rounded-lg bg-slate-700/60 px-3 py-1.5 text-slate-300 active:bg-slate-600">
+                  весь кошелёк
+                </button>
+              )}
+            </div>
+            <input className={inputCls} placeholder="Комментарий (необязательно)"
+              value={comment} maxLength={100} onChange={(e) => setComment(e.target.value)} />
+
+            <button type="button" disabled={busy || !valid} onClick={submit}
+              className={`w-full rounded-xl py-3 font-semibold disabled:opacity-50 ${
+                confirm ? 'bg-emerald-500 text-slate-950 active:bg-emerald-400' : 'bg-yellow-400 text-slate-950 active:bg-yellow-300'
+              }`}>
+              {confirm
+                ? `Подтвердить: ${fmt(value || 0)} → ${userLabel(selected)}`
+                : `Перевести ${fmt(value || 0)}`}
+            </button>
+            {confirm && (
+              <p className="text-center text-xs text-amber-300">Перевод нельзя отменить. Проверь ник получателя.</p>
+            )}
+          </>
+        )}
+
+        <p className={`h-5 text-center text-sm ${msg?.ok ? 'text-emerald-300' : 'text-red-400'}`}>{msg?.text}</p>
+
+        {history.length > 0 && (
+          <div className="border-t border-slate-700/60 pt-3">
+            <p className="text-xs text-slate-400">История переводов</p>
+            <div className="mt-2 space-y-1.5">
+              {history.map((t) => (
+                <div key={t.id} className="rounded-lg bg-slate-900/60 px-3 py-2 text-xs">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="truncate text-slate-300">
+                      {t.outgoing ? '→ ' : '← '}{userLabel(t.other)}
+                    </span>
+                    <span className={`shrink-0 tabular-nums font-semibold ${t.outgoing ? 'text-red-300' : 'text-emerald-300'}`}>
+                      {t.outgoing ? '−' : '+'}{fmt(t.amount)}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-slate-500">
+                    {new Date(t.createdAt).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })}
+                    {t.comment ? ` · ${t.comment}` : ''}
+                  </p>
                 </div>
-                <p className="mt-0.5 text-slate-500">
-                  {new Date(t.createdAt).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })}
-                  {t.comment ? ` · ${t.comment}` : ''}
-                </p>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
+
+      <ul className="mt-5 space-y-1.5 text-xs text-slate-400">
+        <li>• Найди игрока по нику и проверь его перед отправкой.</li>
+        <li>• Переводятся только монеты из кошелька, счёт в банке не трогается.</li>
+        <li>• Перевод нельзя отменить.</li>
+      </ul>
     </div>
   );
 }

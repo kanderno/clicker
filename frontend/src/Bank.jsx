@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { bankDeposit, bankWithdraw, getBankState } from './api.js';
 import Coin from './Coin.jsx';
-import Transfer from './Transfer.jsx';
 
 const fmt = (n) => Number(n).toLocaleString('ru-RU');
 
@@ -134,20 +133,10 @@ export default function Bank({ active, onBalance }) {
         </p>
       </div>
 
-      <Transfer
-        active={active}
-        wallet={state?.wallet}
-        onDone={(wallet) => {
-          onBalance(wallet);
-          load();
-        }}
-      />
-
       <ul className="mt-5 space-y-1.5 text-xs text-slate-400">
         <li>• Сложные проценты: {ratePct}% в час, начисляются автоматически.</li>
         <li>• Проценты копятся не дольше {maxDays} дней без захода в банк.</li>
         <li>• Монеты на счёте защищены от воровства.</li>
-        <li>• Переводить игрокам можно только монеты из кошелька.</li>
       </ul>
     </div>
   );

@@ -2,11 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { getUnseenSteals, getUnseenTransfers, login, markStealsSeen, markTransfersSeen } from './api.js';
 import Game from './Game.jsx';
 import Bank from './Bank.jsx';
+import Transfer, { userLabel } from './Transfer.jsx';
 import Predictions from './Predictions.jsx';
 import Wheel from './Wheel.jsx';
 import Miners from './Miners.jsx';
 import Admin from './Admin.jsx';
-import { userLabel } from './Transfer.jsx';
 
 const BASE_TABS = [
   { id: 'game', label: 'Играть', icon: 'game' },
@@ -14,6 +14,7 @@ const BASE_TABS = [
   { id: 'wheel', label: 'Колесо', icon: 'wheel' },
   { id: 'miners', label: 'Майнеры', icon: 'miners' },
   { id: 'bank', label: 'Банк', icon: 'bank' },
+  { id: 'transfer', label: 'Перевод', icon: 'transfer' },
 ];
 
 const ICONS = {
@@ -38,6 +39,7 @@ const ICONS = {
       <circle cx="14.5" cy="8.5" r="1.6" />
     </>
   ),
+  transfer: <path d="M4 8h14M14 4l4 4-4 4M20 16H6M10 12l-4 4 4 4" />,
   bank: <path d="M3 9.5 12 4l9 5.5M4 9.5V20M20 9.5V20M2 20h20M8 20v-7M16 20v-7M12 20v-7" />,
   admin: (
     <>
@@ -152,6 +154,9 @@ function Main({ user }) {
         </div>
         <div className={tab === 'bank' ? 'h-full' : 'hidden'}>
           <Bank active={tab === 'bank'} onBalance={setBalance} />
+        </div>
+        <div className={tab === 'transfer' ? 'h-full' : 'hidden'}>
+          <Transfer active={tab === 'transfer'} wallet={balance} onDone={setBalance} />
         </div>
         {user.isAdmin && (
           <div className={tab === 'admin' ? 'h-full' : 'hidden'}>
