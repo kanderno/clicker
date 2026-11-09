@@ -13,11 +13,11 @@ import Admin from './Admin.jsx';
 
 const BASE_TABS = [
   { id: 'game', label: 'Играть', icon: 'game' },
+  { id: 'gift', label: 'Подарить', icon: 'gift' },
   { id: 'bets', label: 'Прогнозы', icon: 'bets' },
   { id: 'wheel', label: 'Колесо', icon: 'wheel' },
   { id: 'miners', label: 'Майнеры', icon: 'miners' },
   { id: 'bank', label: 'Банк', icon: 'bank' },
-  { id: 'transfer', label: 'Перевод', icon: 'transfer' },
 ];
 
 const ICONS = {
@@ -42,7 +42,12 @@ const ICONS = {
       <circle cx="14.5" cy="8.5" r="1.6" />
     </>
   ),
-  transfer: <path d="M4 8h14M14 4l4 4-4 4M20 16H6M10 12l-4 4 4 4" />,
+  gift: (
+    <>
+      <rect x="3" y="8" width="18" height="4" rx="1" />
+      <path d="M12 8v13M5 12v9h14v-9M7.5 8a2.5 2.5 0 010-5C11 3 12 8 12 8s1-5 4.5-5a2.5 2.5 0 010 5" />
+    </>
+  ),
   bank: <path d="M3 9.5 12 4l9 5.5M4 9.5V20M20 9.5V20M2 20h20M8 20v-7M16 20v-7M12 20v-7" />,
   admin: (
     <>
@@ -67,6 +72,7 @@ function Main({ user }) {
   const [theft, setTheft] = useState(null); // { count, total, upToId }: показываем жертве, что у неё украли
   const [gift, setGift] = useState(null); // { list, upToId }: входящие переводы от других игроков
   const [notices, setNotices] = useState(null); // { list, upToId }: результаты ставок и другие новости
+  const [giftPreset, setGiftPreset] = useState(null); // { user, nonce }: получатель из лидерборда
   // Вкладка админа только для админов. Настоящая защита на сервере (403), это лишь интерфейс.
   const tabs = user.isAdmin ? [...BASE_TABS, { id: 'admin', label: 'Админ', icon: 'admin' }] : BASE_TABS;
 
@@ -163,12 +169,21 @@ function Main({ user }) {
     setTab(id);
   };
 
+  // Кнопка 🎁 в лидерборде: открываем вкладку подарков с уже выбранным получателем.
+  const giftTo = async (p) => {
+    setGiftPreset({
+      user: { id: p.id, username: p.username, first_name: p.firstName, photo_url: p.photoUrl },
+      nonce: Date.now(),
+    });
+    await go('gift');
+  };
+
   return (
     <div className="app-shell">
       <main className="app-main flex-1 min-h-0">
         {/* Кликер не размонтируем: его таймер отправки тапов должен работать всегда */}
         <div className={tab === 'game' ? 'h-full' : 'hidden'}>
-          <Game ref={gameRef} user={user} balance={balance} onBalance={setBalance} />
+          <Game ref={gameRef} user={user} active={tab === 'game'} balance={balance} onBalance={setBalance} onGift={giftTo} />
         </div>
         <div className={tab === 'bets' ? 'h-full' : 'hidden'}>
           <Predictions active={tab === 'bets'} balance={balance} onBalance={setBalance} />
@@ -182,8 +197,8 @@ function Main({ user }) {
         <div className={tab === 'bank' ? 'h-full' : 'hidden'}>
           <Bank active={tab === 'bank'} onBalance={setBalance} />
         </div>
-        <div className={tab === 'transfer' ? 'h-full' : 'hidden'}>
-          <Transfer active={tab === 'transfer'} wallet={balance} onDone={setBalance} />
+        <div className={tab === 'gift' ? 'h-full' : 'hidden'}>
+          <Transfer active={tab === 'gift'} wallet={balance} onDone={setBalance} preset={giftPreset} />
         </div>
         {user.isAdmin && (
           <div className={tab === 'admin' ? 'h-full' : 'hidden'}>
@@ -213,7 +228,7 @@ function Main({ user }) {
       {gift && !theft && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 px-6 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-2xl bg-slate-800 p-6 text-center text-white shadow-2xl ring-1 ring-emerald-500/40">
-            <p className="text-xl font-bold text-emerald-400">Тебе перевели монеты!</p>
+            <p className="text-xl font-bold text-emerald-400">Тебе подарили монеты!</p>
             <div className="mt-3 max-h-60 space-y-2 overflow-y-auto">
               {gift.list.map((t) => (
                 <div key={t.id} className="rounded-xl bg-slate-900/70 px-3 py-2 text-sm">

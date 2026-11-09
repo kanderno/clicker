@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { getTransfers, searchUsers, sendTransfer } from './api.js';
+import { getGameState, getTransfers, giftSteal, searchUsers, sendTransfer } from './api.js';
+import Avatar from './Avatar.jsx';
 
 const fmt = (n) => Number(n).toLocaleString('ru-RU');
 
@@ -10,6 +11,8 @@ const ERRORS = {
   insufficient_funds: 'Недостаточно монет в кошельке',
   daily_limit: 'Лимит переводов на сегодня исчерпан',
   recipient_not_found: 'Игрок не найден',
+  no_steal_charges: 'У тебя нет зарядов кражи',
+  steal_limit: 'У игрока уже максимум зарядов кражи',
   db_error: 'Ошибка сервера, попробуй ещё раз',
 };
 const errText = (e) => ERRORS[e.message] || `Ошибка: ${e.message}`;
@@ -20,7 +23,8 @@ const inputCls =
 export const userLabel = (u) =>
   u ? [u.first_name, u.username ? `@${u.username}` : null].filter(Boolean).join(' ') || 'Игрок' : 'Игрок';
 
-export default function Transfer({ active, wallet, onDone }) {
+// preset: { user, nonce } — получатель, выбранный в лидерборде (nonce меняется при каждом нажатии).
+export default function Transfer({ active, wallet, onDone, preset }) {
   const [query, setQuery] = useState('');
   const [users, setUsers] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -31,6 +35,8 @@ export default function Transfer({ active, wallet, onDone }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null); // { ok, text }
   const [history, setHistory] = useState([]);
+  const [mode, setMode] = useState('coins'); // 'coins' | 'steal'
+  const [charges, setCharges] = useState(null);
 
   const loadHistory = useCallback(async () => {
     try {
@@ -40,9 +46,28 @@ export default function Transfer({ active, wallet, onDone }) {
     }
   }, []);
 
+  const loadCharges = useCallback(async () => {
+    try {
+      setCharges((await getGameState()).steals.charges);
+    } catch {
+      /* не критично */
+    }
+  }, []);
+
   useEffect(() => {
-    if (active) loadHistory();
-  }, [active, loadHistory]);
+    if (!active) return;
+    loadHistory();
+    loadCharges();
+  }, [active, loadHistory, loadCharges]);
+
+  useEffect(() => {
+    if (!preset?.user) return;
+    setSelected(preset.user);
+    setQuery('');
+    setUsers([]);
+    setConfirm(false);
+    setMsg(null);
+  }, [preset]);
 
   // Поиск с задержкой: не дёргаем сервер на каждую букву.
   useEffect(() => {
@@ -75,6 +100,27 @@ export default function Transfer({ active, wallet, onDone }) {
     setMsg(null);
   };
 
+  const submitSteal = async () => {
+    if (!selected) return;
+    if (!confirm) {
+      setConfirm(true);
+      return;
+    }
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await giftSteal(selected.id);
+      setCharges(r.charges);
+      setMsg({ ok: true, text: `Кража подарена → ${userLabel(selected)}` });
+      setSelected(null);
+    } catch (e) {
+      setMsg({ ok: false, text: errText(e) });
+    } finally {
+      setConfirm(false);
+      setBusy(false);
+    }
+  };
+
   const submit = async () => {
     if (!selected || !valid) {
       setMsg({ ok: false, text: ERRORS.bad_amount });
@@ -90,7 +136,7 @@ export default function Transfer({ active, wallet, onDone }) {
     try {
       const r = await sendTransfer(selected.id, value, comment.trim());
       onDone(r.balance);
-      setMsg({ ok: true, text: `Переведено ${fmt(value)} → ${userLabel(selected)}` });
+      setMsg({ ok: true, text: `Подарено ${fmt(value)} → ${userLabel(selected)}` });
       setAmount('');
       setComment('');
       setSelected(null);
@@ -105,18 +151,35 @@ export default function Transfer({ active, wallet, onDone }) {
 
   return (
     <div className="h-full overflow-y-auto px-4 py-6 text-white">
-      <h1 className="text-center text-xl font-bold">Переводы</h1>
+      <h1 className="text-center text-xl font-bold">Подарки</h1>
       <p className="mt-1 text-center text-sm text-slate-400">
         В кошельке: <b className="tabular-nums text-yellow-400">{wallet != null ? fmt(wallet) : '…'}</b>
+        {charges !== null && <> · краж: <b className="tabular-nums text-red-300">{charges}</b></>}
       </p>
 
-      <div className="mt-5 space-y-3 rounded-2xl bg-slate-800/70 p-4">
-        <p className="text-sm font-semibold text-slate-300">Перевод игроку</p>
+      <div className="sub-tabs mt-4" role="tablist">
+        {[
+          ['coins', 'Монеты'],
+          ['steal', 'Кража'],
+        ].map(([id, label]) => (
+          <button key={id} type="button" role="tab" aria-selected={mode === id}
+            onClick={() => { setMode(id); setConfirm(false); setMsg(null); }}
+            className={`sub-tab ${mode === id ? 'is-active' : ''}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-4 space-y-3 rounded-2xl bg-slate-800/70 p-4">
+        <p className="text-sm font-semibold text-slate-300">
+          {mode === 'coins' ? 'Подарить монеты игроку' : 'Подарить заряд кражи игроку'}
+        </p>
 
         {selected ? (
           <div className="flex items-center justify-between rounded-xl bg-yellow-400/15 px-3 py-2.5 ring-1 ring-yellow-400/60">
-            <span className="truncate text-sm">
-              Кому: <b className="text-yellow-300">{userLabel(selected)}</b>
+            <span className="flex min-w-0 items-center gap-2 truncate text-sm">
+              <Avatar user={selected} className="h-7 w-7 shrink-0" />
+              <span className="truncate">Кому: <b className="text-yellow-300">{userLabel(selected)}</b></span>
             </span>
             <button type="button" onClick={() => { setSelected(null); setConfirm(false); }}
               className="shrink-0 pl-3 text-xs text-slate-400 active:text-white">
@@ -133,7 +196,8 @@ export default function Transfer({ active, wallet, onDone }) {
             <div className="max-h-52 space-y-1.5 overflow-y-auto">
               {users.map((u) => (
                 <button key={u.id} type="button" onClick={() => pick(u)}
-                  className="flex w-full items-center rounded-xl bg-slate-900/70 px-3 py-2 text-left text-sm active:bg-slate-700">
+                  className="flex w-full items-center gap-2 rounded-xl bg-slate-900/70 px-3 py-2 text-left text-sm active:bg-slate-700">
+                  <Avatar user={u} className="h-7 w-7 shrink-0" />
                   <span className="truncate">
                     {u.username ? <b className="text-yellow-300">@{u.username}</b> : <span className="text-slate-500">без ника</span>}
                     {u.first_name && <span className="ml-2 text-slate-400">{u.first_name}</span>}
@@ -144,7 +208,22 @@ export default function Transfer({ active, wallet, onDone }) {
           </>
         )}
 
-        {selected && (
+        {selected && mode === 'steal' && (
+          <>
+            <p className="text-xs text-slate-400">
+              Игрок получит 1 заряд и сможет сам украсть у кого-нибудь из лидерборда. У тебя станет на одну кражу меньше.
+            </p>
+            <button type="button" disabled={busy || !charges} onClick={submitSteal}
+              className={`w-full rounded-xl py-3 font-semibold disabled:opacity-50 ${
+                confirm ? 'bg-emerald-500 text-slate-950 active:bg-emerald-400' : 'bg-yellow-400 text-slate-950 active:bg-yellow-300'
+              }`}>
+              {confirm ? `Подтвердить: кража → ${userLabel(selected)}` : 'Подарить 1 кражу'}
+            </button>
+            {!charges && <p className="text-center text-xs text-amber-300">Зарядов кражи нет: выбей их на колесе или купи на главном экране.</p>}
+          </>
+        )}
+
+        {selected && mode === 'coins' && (
           <>
             <input type="text" inputMode="numeric" className={inputCls} placeholder="Сколько монет"
               value={amount}
@@ -172,10 +251,10 @@ export default function Transfer({ active, wallet, onDone }) {
               }`}>
               {confirm
                 ? `Подтвердить: ${fmt(value || 0)} → ${userLabel(selected)}`
-                : `Перевести ${fmt(value || 0)}`}
+                : `Подарить ${fmt(value || 0)}`}
             </button>
             {confirm && (
-              <p className="text-center text-xs text-amber-300">Перевод нельзя отменить. Проверь ник получателя.</p>
+              <p className="text-center text-xs text-amber-300">Подарок нельзя отменить. Проверь ник получателя.</p>
             )}
           </>
         )}
@@ -184,7 +263,7 @@ export default function Transfer({ active, wallet, onDone }) {
 
         {history.length > 0 && (
           <div className="border-t border-slate-700/60 pt-3">
-            <p className="text-xs text-slate-400">История переводов</p>
+            <p className="text-xs text-slate-400">История подарков</p>
             <div className="mt-2 space-y-1.5">
               {history.map((t) => (
                 <div key={t.id} className="rounded-lg bg-slate-900/60 px-3 py-2 text-xs">
@@ -208,9 +287,9 @@ export default function Transfer({ active, wallet, onDone }) {
       </div>
 
       <ul className="mt-5 space-y-1.5 text-xs text-slate-400">
-        <li>• Найди игрока по нику и проверь его перед отправкой.</li>
-        <li>• Переводятся только монеты из кошелька, счёт в банке не трогается.</li>
-        <li>• Перевод нельзя отменить.</li>
+        <li>• Найди игрока по нику или нажми 🎁 рядом с ним в лидерборде на главном экране.</li>
+        <li>• Дарятся только монеты из кошелька, счёт в банке не трогается.</li>
+        <li>• Подарок нельзя отменить.</li>
       </ul>
     </div>
   );

@@ -5,6 +5,8 @@ const KINDS = {
   bet_win: { sign: '+', cls: 'text-emerald-300', text: (n) => `Ставка сыграла на «${n.body}»` },
   bet_lost: { sign: '−', cls: 'text-red-300', text: (n) => `Ставка на «${n.body}» не сыграла` },
   bet_refund: { sign: '↩ ', cls: 'text-amber-300', text: () => 'Событие отменено, ставка вернулась' },
+  league_reward: { sign: '+', cls: 'text-emerald-300', text: (n) => `Награда лиги: ${n.body}` },
+  steal_gift: { sign: '', cls: 'text-red-300', text: () => 'подарил(а) тебе заряд кражи — используй его в лидерборде', hideAmount: true },
 };
 const FALLBACK = { sign: '', cls: 'text-yellow-300', text: (n) => n.body || '' };
 
@@ -27,7 +29,7 @@ export default function NoticesModal({ list, onClose }) {
               <div key={n.id} className="rounded-xl bg-slate-900/70 px-3 py-2 text-left text-sm">
                 <div className="flex items-start justify-between gap-3">
                   <span className="min-w-0 break-words font-semibold">{n.title}</span>
-                  {n.amount > 0 && (
+                  {n.amount > 0 && !k.hideAmount && (
                     <b className={`shrink-0 tabular-nums ${k.cls}`}>{k.sign}{fmt(n.amount)}</b>
                   )}
                 </div>

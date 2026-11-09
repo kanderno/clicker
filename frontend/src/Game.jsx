@@ -1,29 +1,67 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import WebApp from '@twa-dev/sdk';
-import { login, sendTaps } from './api.js';
+import { buySteal, claimStreak, getGameState, login, sendTaps, stealFrom, upgradeTap } from './api.js';
 import Coin from './Coin.jsx';
+import Avatar, { displayName } from './Avatar.jsx';
+import Leaderboard, { MaskIcon } from './Leaderboard.jsx';
+import Streak, { rewardParts } from './Streak.jsx';
 
 const FLUSH_MS = 7000;      // раз в 7 секунд отправляем накопленные тапы
 const MAX_CPS = 12;         // на клиенте чуть ниже серверного лимита (15), чтобы не терять тапы
 const MIN_GAP = 1000 / MAX_CPS;
 const MAX_FLOATERS = 12;
 
-const fmt = (n) => n.toLocaleString('ru-RU');
+const fmt = (n) => Number(n).toLocaleString('ru-RU');
+
+const ERRORS = {
+  insufficient_funds: 'Не хватает монет',
+  max_level: 'Удар уже прокачан до максимума',
+  already_claimed: 'Награда за сегодня уже получена',
+  no_steal_charges: 'Нет зарядов кражи: выбей на колесе, получи за стрик или купи',
+  self_steal: 'У себя украсть нельзя',
+  victim_too_poor: 'У игрока слишком мало монет в кошельке',
+  victim_protected: 'Игрока сейчас нельзя обокрасть: он новичок или его уже грабили сегодня',
+  victim_not_found: 'Игрок не найден',
+  steal_limit: 'Больше зарядов кражи держать нельзя',
+  db_error: 'Ошибка сервера, попробуй ещё раз',
+};
+const errText = (e) => ERRORS[e.message] || 'Не получилось, попробуй ещё раз';
+
+function haptic(kind) {
+  try {
+    if (kind === 'light') WebApp.HapticFeedback.impactOccurred('light');
+    else WebApp.HapticFeedback.notificationOccurred(kind);
+  } catch {
+    /* вне Telegram вибрации нет */
+  }
+}
 
 // balance: подтверждённый сервером баланс (хранится в App). pending: тапы, ещё не отправленные.
-// Показываем balance + pending только для отклика интерфейса; истина всегда на сервере.
-const Game = forwardRef(function Game({ user, balance, onBalance }, ref) {
+// Показываем balance + pending × сила удара только для отклика интерфейса; истина всегда на сервере.
+const Game = forwardRef(function Game({ user, active, balance, onBalance, onGift }, ref) {
   const [pending, setPending] = useState(0);
   const [syncError, setSyncError] = useState(null); // код ошибки или null
   const [floaters, setFloaters] = useState([]);
+  const [state, setState] = useState(null); // /game/state: удар, стрик, кражи
+  const [busy, setBusy] = useState(false);
+  const [toast, setToast] = useState(null); // { ok, text }
+  const [stealTarget, setStealTarget] = useState(null);
+  const [lbKey, setLbKey] = useState(0);
 
   const pendingRef = useRef(0);
   const flushPromise = useRef(null);
   const lastTapAt = useRef(0);
   const floaterId = useRef(0);
   const areaRef = useRef(null);
-  const playerName = user.first_name || user.username || 'Игрок';
-  const playerInitial = Array.from(playerName)[0].toLocaleUpperCase('ru-RU');
+  const toastTimer = useRef(null);
+  const power = state?.tap.power ?? 1;
+
+  const showToast = useCallback((ok, text) => {
+    clearTimeout(toastTimer.current);
+    setToast({ ok, text });
+    toastTimer.current = setTimeout(() => setToast(null), 3500);
+  }, []);
+  useEffect(() => () => clearTimeout(toastTimer.current), []);
 
   const flush = useCallback(() => {
     if (flushPromise.current) return flushPromise.current;
@@ -47,7 +85,7 @@ const Game = forwardRef(function Game({ user, balance, onBalance }, ref) {
     return p;
   }, [onBalance]);
 
-  // Родитель вызывает flush перед переходом в банк, чтобы баланс на сервере был актуальным.
+  // Родитель вызывает flush перед переходом на другие вкладки, чтобы баланс на сервере был актуальным.
   useImperativeHandle(ref, () => ({ flush }), [flush]);
 
   useEffect(() => {
@@ -61,6 +99,18 @@ const Game = forwardRef(function Game({ user, balance, onBalance }, ref) {
     };
   }, [flush]);
 
+  const loadState = useCallback(async () => {
+    try {
+      setState(await getGameState());
+    } catch {
+      /* панели просто не обновятся, кликер работает и без них */
+    }
+  }, []);
+
+  useEffect(() => {
+    if (active) loadState();
+  }, [active, loadState]);
+
   const onTap = (e) => {
     const now = performance.now();
     if (now - lastTapAt.current < MIN_GAP) return;
@@ -68,12 +118,7 @@ const Game = forwardRef(function Game({ user, balance, onBalance }, ref) {
 
     pendingRef.current += 1;
     setPending(pendingRef.current);
-
-    try {
-      WebApp.HapticFeedback.impactOccurred('light');
-    } catch {
-      /* вне Telegram вибрации нет */
-    }
+    haptic('light');
 
     const rect = areaRef.current.getBoundingClientRect();
     const id = ++floaterId.current;
@@ -81,6 +126,48 @@ const Game = forwardRef(function Game({ user, balance, onBalance }, ref) {
     setFloaters((f) => [...f.slice(-(MAX_FLOATERS - 1)), item]);
     setTimeout(() => setFloaters((f) => f.filter((i) => i.id !== id)), 700);
   };
+
+  // Любое действие с монетами: сначала отправляем тапы, потом запрос, потом свежее состояние.
+  const act = async (fn, okText) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await flush();
+      const r = await fn();
+      if (r.balance !== undefined) onBalance(r.balance);
+      haptic('success');
+      showToast(true, okText(r));
+      await loadState();
+      setLbKey((k) => k + 1);
+    } catch (e) {
+      haptic('error');
+      showToast(false, errText(e));
+      loadState();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const doUpgrade = () => act(upgradeTap, (r) => `Удар прокачан до ${r.level} уровня: +${fmt(r.level)} за тап`);
+  const doClaim = () =>
+    act(claimStreak, (r) => `День ${r.day}: ${rewardParts(r).join(' + ') || 'награда получена'}`);
+  const doBuySteal = () => act(buySteal, (r) => `Куплен заряд кражи. Всего: ${r.charges}`);
+
+  const askSteal = (p) => {
+    if (!state?.steals.charges) {
+      showToast(false, ERRORS.no_steal_charges);
+      return;
+    }
+    setStealTarget(p);
+  };
+  const doSteal = () => {
+    const p = stealTarget;
+    setStealTarget(null);
+    act(() => stealFrom(p.id), (r) => `Украдено у ${displayName(p)}: +${fmt(r.stolen)}`);
+  };
+
+  const tap = state?.tap;
+  const shown = balance + pending * power;
 
   return (
     <div className="game-screen">
@@ -92,7 +179,7 @@ const Game = forwardRef(function Game({ user, balance, onBalance }, ref) {
             <span className="brand-caption">ПЕЛЬМЕННЫЙ ЦЕХ</span>
           </span>
         </div>
-        <span className="player-avatar" title={playerName}>{playerInitial}</span>
+        <Avatar user={user} className="player-avatar" />
       </header>
 
       <section className="balance-card" aria-label="Текущий баланс">
@@ -102,7 +189,7 @@ const Game = forwardRef(function Game({ user, balance, onBalance }, ref) {
         </div>
         <p className="balance-value">
           <Coin className="balance-coin" />
-          <span className="tabular-nums">{fmt(balance + pending)}</span>
+          <span className="tabular-nums">{fmt(shown)}</span>
         </p>
         <p className={`sync-status ${syncError ? 'has-error' : pending > 0 ? 'is-pending' : ''}`}>
           <span className="sync-dot" />
@@ -112,6 +199,11 @@ const Game = forwardRef(function Game({ user, balance, onBalance }, ref) {
               ? 'Синхронизируем баланс…'
               : 'Все монеты сохранены'}
         </p>
+        <div className="balance-stats">
+          <span><small>За тап</small><b>+{fmt(power)}</b></span>
+          <span><small>Кражи</small><b className={state?.steals.charges ? 'is-red' : ''}>{state?.steals.charges ?? 0}</b></span>
+          <span><small>Бонус-спины</small><b>{state?.bonusSpins ?? 0}</b></span>
+        </div>
       </section>
 
       <div ref={areaRef} className="coin-stage">
@@ -121,31 +213,47 @@ const Game = forwardRef(function Game({ user, balance, onBalance }, ref) {
           onPointerDown={onTap}
           className="coin-tap-button"
           style={{ touchAction: 'manipulation' }}
-          aria-label="Нажать на пелькоин и заработать одну монету"
+          aria-label={`Нажать на пелькоин и заработать ${power} монет`}
         >
           <Coin className="coin-art pointer-events-none" />
         </button>
         {floaters.map((f) => (
-          <span
-            key={f.id}
-            className="float-up tap-floater"
-            style={{ left: f.x, top: f.y }}
-          >
-            +1
+          <span key={f.id} className="float-up tap-floater" style={{ left: f.x, top: f.y }}>
+            +{power}
           </span>
         ))}
       </div>
 
-      <div className="tap-copy">
-        <strong>Нажми на пелькоин</strong>
-        <span>Каждый тап приближает к награде</span>
-      </div>
+      {tap && (
+        <button type="button" className="upgrade-tap" onClick={doUpgrade}
+          disabled={busy || tap.upgradeCost === null || shown < tap.upgradeCost}>
+          <span className="upgrade-tap-text">
+            <b>Прокачать удар</b>
+            <small>
+              {tap.upgradeCost === null
+                ? `Уровень ${tap.level} — максимум`
+                : `Ур. ${tap.level} → ${tap.level + 1}: +${fmt(tap.power)} → +${fmt(tap.power + 1)} за тап`}
+            </small>
+          </span>
+          {tap.upgradeCost !== null && (
+            <span className="upgrade-tap-price"><Coin className="upgrade-coin" />{fmt(tap.upgradeCost)}</span>
+          )}
+        </button>
+      )}
 
-      <div className="game-note">
-        <span className="note-spark" aria-hidden="true">✧</span>
-        <span><strong>1 тап = 1 монета</strong><small>Баланс синхронизируется автоматически</small></span>
-        <span className="note-arrow" aria-hidden="true">↗</span>
-      </div>
+      <Streak streak={state?.streak} busy={busy} onClaim={doClaim} />
+
+      <Leaderboard
+        active={active}
+        reloadKey={lbKey}
+        steals={state?.steals}
+        balance={shown}
+        busy={busy}
+        onGift={onGift}
+        onSteal={askSteal}
+        onBuySteal={doBuySteal}
+        onNoNick={(p) => showToast(false, `У игрока ${displayName(p)} нет @ника — профиль не открыть`)}
+      />
 
       <footer className="game-credits">
         <p>Concept: Ilyas Upushev, 2026</p>
@@ -153,6 +261,30 @@ const Game = forwardRef(function Game({ user, balance, onBalance }, ref) {
         <p>Dev. Ilyas, Alex, Mansur</p>
         <p className="game-credits-copy">©️ 2026 Pelmen Coins Bot. All rights reserved. Not a p2p market!</p>
       </footer>
+
+      {toast && <div className={`game-toast ${toast.ok ? 'is-ok' : 'is-error'}`} role="status">{toast.text}</div>}
+
+      {stealTarget && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-4 pb-6 backdrop-blur-sm"
+          onClick={() => setStealTarget(null)}>
+          <div className="sheet w-full max-w-sm rounded-2xl p-5 text-center" onClick={(e) => e.stopPropagation()}>
+            <span className="sheet-icon"><MaskIcon /></span>
+            <p className="mt-2 text-lg font-bold">Украсть у {displayName(stealTarget)}?</p>
+            <p className="mt-1 text-sm text-slate-400">
+              Потратится 1 заряд (осталось {state?.steals.charges ?? 0}). Сколько унесёшь — узнаешь после кражи.
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <button type="button" onClick={() => setStealTarget(null)}
+                className="rounded-xl bg-slate-700 py-3 font-semibold active:bg-slate-600">
+                Отмена
+              </button>
+              <button type="button" onClick={doSteal} className="sheet-danger rounded-xl py-3 font-semibold">
+                Украсть
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 });

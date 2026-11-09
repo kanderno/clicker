@@ -12,6 +12,7 @@ const fmt = (n) => Number(n).toLocaleString('ru-RU');
 const ERRORS = {
   free_spin_used: 'Бесплатный спин на сегодня уже использован',
   paid_limit: 'На сегодня платные спины закончились',
+  no_bonus_spins: 'Бонусных спинов нет',
   insufficient_funds: 'Не хватает монет',
   db_error: 'Ошибка сервера, попробуй ещё раз',
 };
@@ -130,11 +131,18 @@ export default function Wheel({ active, balance, onBalance }) {
             {result.kind === 'free_bet'
               ? `Бесплатная ставка на ${fmt(result.value)}! Используй её во вкладке «Прогнозы».`
               : result.kind === 'steal'
-                ? `Ты украл ${fmt(result.value)} монет у случайного игрока!`
+                ? 'Заряд кражи! Укради у любого игрока в лидерборде на главном экране.'
                 : result.kind === 'part'
                   ? `Деталь: ${result.label}. Собирай майнеры во вкладке «Майнеры».`
                   : `Выигрыш: +${fmt(result.value)} монет`}
           </p>
+        )}
+
+        {data?.bonusSpins > 0 && (
+          <button type="button" disabled={busy} onClick={() => spin('bonus')}
+            className="mb-3 w-full rounded-2xl bg-emerald-500 py-3.5 text-lg font-bold text-slate-950 active:bg-emerald-400 disabled:opacity-50">
+            Бонусный спин ({data.bonusSpins})
+          </button>
         )}
 
         {data?.freeAvailable && (
@@ -165,6 +173,13 @@ export default function Wheel({ active, balance, onBalance }) {
         )}
 
         <p className="mt-3 h-5 text-sm text-red-400">{error}</p>
+      </div>
+
+      <div className="wheel-legend">
+        <p><b>Число</b> — столько монет сразу падает в кошелёк.</p>
+        <p><b>Фрибет 100</b> — бесплатная ставка на 100 монет во вкладке «Прогнозы»: монеты не списываются, а выигрыш твой.</p>
+        <p><b>Кража</b> — заряд кражи: выбери игрока в лидерборде и забери часть его монет.</p>
+        <p><b>Бонусные спины</b> дают за стрик на главном экране.</p>
       </div>
 
       <p className="pb-2 text-center text-xs text-slate-500">

@@ -113,3 +113,12 @@ export const buyPart = (partId, qty = 1) =>
 export const getUnseenNotices = () => request('/notices/unseen');
 export const markNoticesSeen = (upToId) =>
   request('/notices/seen', { method: 'POST', body: JSON.stringify({ upToId }) });
+
+// ---------- Главный экран: прокачка удара, стрик, кражи, лидерборды ----------
+export const getGameState = () => request('/game/state');
+export const upgradeTap = () => request('/tap/upgrade', { method: 'POST' });
+export const claimStreak = () => request('/streak/claim', { method: 'POST' });
+export const getLeaderboard = () => request('/leaderboard');
+export const stealFrom = (victimId) => request('/steal', { method: 'POST', body: JSON.stringify({ victimId }) });
+export const buySteal = () => request('/steals/buy', { method: 'POST' });
+export const giftSteal = (toId) => request('/steals/gift', { method: 'POST', body: JSON.stringify({ toId }) });

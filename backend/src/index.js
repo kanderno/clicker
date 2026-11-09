@@ -10,6 +10,7 @@ import { supabase } from './db.js';
 import { validateInitData } from './telegram.js';
 import { listEventsWithOptions, toMyBetsView, toPlayerView } from './events.js';
 import { buildMinersView } from './miners.js';
+import { buildLeaderboard } from './leaderboard.js';
 import { createTelegramApi, handleUpdate, isHttpsUrl, secretMatches } from './bot.js';
 
 const app = Fastify({ logger: true, trustProxy: true });
@@ -34,7 +35,7 @@ app.decorate('requireAdmin', async (req, reply) => {
   }
 });
 
-const USER_FIELDS = 'id, telegram_id, username, first_name, balance';
+const USER_FIELDS = 'id, telegram_id, username, first_name, photo_url, balance';
 
 app.get('/health', async () => ({ ok: true, time: new Date().toISOString() }));
 
@@ -64,6 +65,8 @@ app.post(
           telegram_id: tg.id,
           username: tg.username ?? null,
           first_name: tg.first_name ?? null,
+          // Аватарка из Telegram (есть, если игрок не скрыл фото настройками приватности)
+          photo_url: typeof tg.photo_url === 'string' && tg.photo_url.startsWith('https://') ? tg.photo_url : null,
         },
         { onConflict: 'telegram_id' },
       )
@@ -117,6 +120,122 @@ app.post(
     return { balance: data[0].new_balance, accepted: data[0].accepted };
   },
 );
+
+// ---------- Главный экран: прокачка удара, стрик, заряды кражи ----------
+const GAME_ERRORS = [
+  'max_level', 'insufficient_funds', 'already_claimed', 'user_not_found', 'no_steal_charges', 'self_steal',
+  'victim_not_found', 'victim_too_poor', 'victim_protected', 'steal_limit', 'self_transfer', 'recipient_not_found',
+];
+const gameLimit = { rateLimit: { max: 60, timeWindow: '1 minute' } };
+function gameFail(req, reply, error, what) {
+  const code = GAME_ERRORS.find((c) => error?.message?.includes(c));
+  if (code) return reply.code(code.endsWith('not_found') ? 404 : 400).send({ error: code });
+  req.log.error(error, what);
+  return reply.code(500).send({ error: 'db_error' });
+}
+
+app.get('/game/state', { preHandler: app.authenticate, config: gameLimit }, async (req, reply) => {
+  const { data, error } = await supabase.rpc('game_state', { p_user: req.user.uid });
+  if (error || !data?.length) return gameFail(req, reply, error, 'game_state failed');
+  const r = data[0];
+  return {
+    balance: Number(r.balance),
+    tap: {
+      level: r.tap_level,
+      power: Number(r.tap_power),
+      upgradeCost: r.tap_cost === null ? null : Number(r.tap_cost),
+      maxLevel: r.tap_max,
+    },
+    streak: {
+      days: r.streak_days,
+      claimedToday: r.streak_claimed_today,
+      next: r.streak_next,
+      rewards: r.streak_rewards,
+    },
+    steals: { charges: r.steal_charges, price: Number(r.steal_price), max: r.steal_max },
+    bonusSpins: r.bonus_spins,
+  };
+});
+
+app.post('/tap/upgrade', { preHandler: app.authenticate, config: gameLimit }, async (req, reply) => {
+  const { data, error } = await supabase.rpc('tap_upgrade', { p_user: req.user.uid });
+  if (error || !data?.length) return gameFail(req, reply, error, 'tap_upgrade failed');
+  const r = data[0];
+  return {
+    balance: Number(r.new_balance),
+    level: r.new_level,
+    nextCost: r.next_cost === null ? null : Number(r.next_cost),
+  };
+});
+
+app.post('/streak/claim', { preHandler: app.authenticate, config: gameLimit }, async (req, reply) => {
+  const { data, error } = await supabase.rpc('streak_claim', { p_user: req.user.uid });
+  if (error || !data?.length) return gameFail(req, reply, error, 'streak_claim failed');
+  const r = data[0];
+  return { day: r.day_count, coins: Number(r.coins), spins: r.spins, steals: r.steals, balance: Number(r.new_balance) };
+});
+
+// Кража у выбранного игрока: тратится заряд, процент (2–10%) случайный и заранее игроку не показывается.
+app.post(
+  '/steal',
+  {
+    preHandler: app.authenticate,
+    config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
+    schema: {
+      body: { type: 'object', required: ['victimId'], properties: { victimId: { type: 'integer', minimum: 1 } } },
+    },
+  },
+  async (req, reply) => {
+    const { data, error } = await supabase.rpc('steal_player', { p_thief: req.user.uid, p_victim: req.body.victimId });
+    if (error || !data?.length) return gameFail(req, reply, error, 'steal_player failed');
+    const r = data[0];
+    return { stolen: Number(r.stolen), balance: Number(r.new_balance), charges: r.charges_left };
+  },
+);
+
+app.post('/steals/buy', { preHandler: app.authenticate, config: gameLimit }, async (req, reply) => {
+  const { data, error } = await supabase.rpc('steal_buy', { p_user: req.user.uid });
+  if (error || !data?.length) return gameFail(req, reply, error, 'steal_buy failed');
+  return { balance: Number(data[0].new_balance), charges: data[0].charges };
+});
+
+app.post(
+  '/steals/gift',
+  {
+    preHandler: app.authenticate,
+    config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
+    schema: { body: { type: 'object', required: ['toId'], properties: { toId: { type: 'integer', minimum: 1 } } } },
+  },
+  async (req, reply) => {
+    const { data, error } = await supabase.rpc('steal_gift', { p_from: req.user.uid, p_to: req.body.toId });
+    if (error || !data?.length) return gameFail(req, reply, error, 'steal_gift failed');
+    return { charges: data[0].charges_left };
+  },
+);
+
+// ---------- Лидерборды и лиги ----------
+app.get('/leaderboard', { preHandler: app.authenticate, config: gameLimit }, async (req, reply) => {
+  // Недельные награды лиг выдаются при первом открытии лидерборда после конца недели (повторно не платятся).
+  const settle = await supabase.rpc('league_settle');
+  if (settle.error) req.log.error(settle.error, 'league_settle failed');
+
+  const [rowsRes, leaguesRes, meRes] = await Promise.all([
+    supabase.rpc('leaderboard_view', { p_user: req.user.uid, p_limit: 20 }),
+    supabase.from('leagues').select('id, name, min_peak, reward_1, reward_2, reward_3'),
+    supabase.from('users').select('peak_balance').eq('id', req.user.uid).single(),
+  ]);
+  const failed = [rowsRes, leaguesRes, meRes].find((r) => r.error);
+  if (failed) {
+    req.log.error(failed.error, 'leaderboard failed');
+    return reply.code(500).send({ error: 'db_error' });
+  }
+  return buildLeaderboard({
+    rows: rowsRes.data,
+    leagues: leaguesRes.data,
+    myId: req.user.uid,
+    peak: meRes.data.peak_balance,
+  });
+});
 
 // ---------- Банк ----------
 const BANK_ERRORS = ['insufficient_funds', 'bad_amount', 'user_not_found'];
@@ -283,7 +402,7 @@ app.post(
 );
 
 // ---------- Колесо фортуны ----------
-const WHEEL_ERRORS = ['free_spin_used', 'paid_limit', 'insufficient_funds', 'user_not_found', 'bad_mode'];
+const WHEEL_ERRORS = ['free_spin_used', 'paid_limit', 'no_bonus_spins', 'insufficient_funds', 'user_not_found', 'bad_mode'];
 const wheelLimit = { rateLimit: { max: 30, timeWindow: '1 minute' } };
 
 app.get('/wheel', { preHandler: app.authenticate, config: wheelLimit }, async (req, reply) => {
@@ -303,6 +422,8 @@ app.get('/wheel', { preHandler: app.authenticate, config: wheelLimit }, async (r
     paidMax: st.paid_max,
     price: st.price,
     secondsToReset: st.seconds_to_reset,
+    bonusSpins: st.bonus_spins,
+    stealCharges: st.steal_charges,
     prizes: prizesRes.data,
   };
 });
@@ -316,7 +437,7 @@ app.post(
       body: {
         type: 'object',
         required: ['mode'],
-        properties: { mode: { type: 'string', enum: ['free', 'paid'] } },
+        properties: { mode: { type: 'string', enum: ['free', 'paid', 'bonus'] } },
       },
     },
   },
@@ -432,7 +553,7 @@ const TRANSFER_ERRORS = [
   'bad_amount', 'bad_comment', 'self_transfer', 'insufficient_funds',
   'daily_limit', 'recipient_not_found', 'user_not_found',
 ];
-const PUBLIC_USER_FIELDS = 'id, username, first_name'; // баланс и Telegram ID чужим игрокам не отдаём
+const PUBLIC_USER_FIELDS = 'id, username, first_name, photo_url'; // баланс и Telegram ID чужим игрокам не отдаём
 const transferLimit = { rateLimit: { max: 30, timeWindow: '1 minute' } };
 
 // Поиск получателя по @нику или имени. Минимум 2 символа: список всех игроков целиком не выдаём.
