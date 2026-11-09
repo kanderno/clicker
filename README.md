@@ -22,6 +22,8 @@ npm run dev:front   # http://localhost:5173
 - [x] 5. Колесо: 5a монеты+докупка (backend/sql/007), 5b free bets (backend/sql/008), 5c воровство (backend/sql/009, готово)
 - [x] 6. Майнеры (нужен backend/sql/010_miners.sql)
 - [x] 7. Коэффициенты у событий + начисление коинов админом (нужен backend/sql/011_odds_and_admin_coins.sql)
+- [x] 8. Переводы между игроками (нужен backend/sql/012_transfers.sql)
+- [x] 9. Ставки: подвкладка «Мои ставки», новые события сверху, уведомления о выигрыше/проигрыше (нужен backend/sql/013_notices.sql)
 
 Правила разработки: см. `CLAUDE.md`.
 

@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getUnseenSteals, getUnseenTransfers, login, markStealsSeen, markTransfersSeen } from './api.js';
+import {
+  getUnseenNotices, getUnseenSteals, getUnseenTransfers, login, markNoticesSeen, markStealsSeen, markTransfersSeen,
+} from './api.js';
+import NoticesModal from './Notices.jsx';
 import Game from './Game.jsx';
 import Bank from './Bank.jsx';
 import Transfer, { userLabel } from './Transfer.jsx';
@@ -63,6 +66,7 @@ function Main({ user }) {
   const gameRef = useRef(null);
   const [theft, setTheft] = useState(null); // { count, total, upToId }: показываем жертве, что у неё украли
   const [gift, setGift] = useState(null); // { list, upToId }: входящие переводы от других игроков
+  const [notices, setNotices] = useState(null); // { list, upToId }: результаты ставок и другие новости
   // Вкладка админа только для админов. Настоящая защита на сервере (403), это лишь интерфейс.
   const tabs = user.isAdmin ? [...BASE_TABS, { id: 'admin', label: 'Админ', icon: 'admin' }] : BASE_TABS;
 
@@ -94,10 +98,23 @@ function Main({ user }) {
     }
   }, []);
 
+  const checkNotices = useCallback(async () => {
+    try {
+      const r = await getUnseenNotices();
+      if (r.notices.length) {
+        setBalance(r.balance); // выплаты уже прошли на сервере
+        setNotices({ list: r.notices, upToId: Math.max(...r.notices.map((x) => x.id)) });
+      }
+    } catch {
+      /* уведомление не критично: попробуем в следующий раз */
+    }
+  }, []);
+
   useEffect(() => {
     const check = () => {
       checkThefts();
       checkTransfers();
+      checkNotices();
     };
     check();
     const t = setInterval(check, 45000);
@@ -107,7 +124,7 @@ function Main({ user }) {
       clearInterval(t);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [checkThefts, checkTransfers]);
+  }, [checkThefts, checkTransfers, checkNotices]);
 
   const dismissTheft = async () => {
     const { upToId } = theft;
@@ -124,6 +141,16 @@ function Main({ user }) {
     setGift(null);
     try {
       await markTransfersSeen(upToId);
+    } catch {
+      /* если не получилось, покажем снова */
+    }
+  };
+
+  const dismissNotices = async () => {
+    const { upToId } = notices;
+    setNotices(null);
+    try {
+      await markNoticesSeen(upToId);
     } catch {
       /* если не получилось, покажем снова */
     }
@@ -206,6 +233,8 @@ function Main({ user }) {
           </div>
         </div>
       )}
+
+      {notices && !theft && !gift && <NoticesModal list={notices.list} onClose={dismissNotices} />}
 
       <nav
         className={`app-nav ${tabs.length > 5 ? 'is-dense' : ''}`}

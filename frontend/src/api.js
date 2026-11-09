@@ -108,3 +108,8 @@ export const upgradeMiner = (id) => request(`/miners/${id}/upgrade`, { method: '
 export const collectMiners = () => request('/miners/collect', { method: 'POST' });
 export const buyPart = (partId, qty = 1) =>
   request('/parts/buy', { method: 'POST', body: JSON.stringify({ partId, qty }) });
+
+// ---------- Уведомления (результаты ставок и др.) ----------
+export const getUnseenNotices = () => request('/notices/unseen');
+export const markNoticesSeen = (upToId) =>
+  request('/notices/seen', { method: 'POST', body: JSON.stringify({ upToId }) });

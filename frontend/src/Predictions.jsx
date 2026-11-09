@@ -27,6 +27,7 @@ export default function Predictions({ active, balance, onBalance }) {
   const [loadError, setLoadError] = useState(false);
   const [history, setHistory] = useState([]);
   const [freeBets, setFreeBets] = useState([]);
+  const [view, setView] = useState('events'); // 'events' | 'mine'
 
   const load = useCallback(async () => {
     try {
@@ -97,7 +98,19 @@ export default function Predictions({ active, balance, onBalance }) {
         Кошелёк: <Coin className="w-4 h-4" /> <span className="font-semibold text-yellow-400">{fmt(balance)}</span>
       </p>
 
-      {freeBets.length > 0 && (
+      <div className="sub-tabs mt-4" role="tablist">
+        {[
+          ['events', 'События'],
+          ['mine', `Мои ставки${history.length ? ` · ${history.length}` : ''}`],
+        ].map(([id, label]) => (
+          <button key={id} type="button" role="tab" aria-selected={view === id}
+            onClick={() => setView(id)} className={`sub-tab ${view === id ? 'is-active' : ''}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {view === 'events' && freeBets.length > 0 && (
         <p className="mt-2 text-center text-xs text-emerald-300">
           Бесплатных ставок: {freeBets.length} (выбери вариант и используй их)
         </p>
@@ -105,12 +118,14 @@ export default function Predictions({ active, balance, onBalance }) {
 
       {events === null && !loadError && <p className="mt-6 text-center text-sm text-slate-500">Загрузка…</p>}
       {loadError && <p className="mt-6 text-center text-sm text-red-400">Не удалось загрузить события</p>}
-      {events?.length === 0 && (
-        <p className="mt-6 text-center text-sm text-slate-500">Пока нет открытых событий. Загляни позже.</p>
+      {view === 'events' && events?.length === 0 && (
+        <p className="mt-6 text-center text-sm text-slate-500">Пока нет событий. Загляни позже.</p>
       )}
 
+      {view === 'events' && (
       <div className="mt-4 space-y-4 pb-4">
         {events?.map((ev) => {
+          const closed = ev.status !== 'open';
           const mine = ev.myBet;
           const panelOpen = sel?.eventId === ev.id && ev.bettingOpen;
           // При фиксированном коэффициенте выплату можно показать сразу, до закрытия события.
@@ -122,11 +137,23 @@ export default function Predictions({ active, balance, onBalance }) {
             ? Math.floor(stake * selOdds)
             : null;
           return (
-            <div key={ev.id} className="rounded-2xl bg-slate-800/70 p-4">
-              <p className="font-semibold leading-snug">{ev.title}</p>
+            <div key={ev.id} className={`rounded-2xl bg-slate-800/70 p-4 ${closed ? 'opacity-80' : ''}`}>
+              <div className="flex items-start justify-between gap-3">
+                <p className="font-semibold leading-snug">{ev.title}</p>
+                {closed && (
+                  <span className={`shrink-0 rounded-md px-2 py-0.5 text-xs ${
+                    ev.status === 'cancelled' ? 'bg-red-500/20 text-red-300' : 'bg-slate-600/40 text-slate-300'}`}>
+                    {ev.status === 'cancelled' ? 'отменено' : 'завершено'}
+                  </span>
+                )}
+              </div>
               {ev.description && <p className="mt-1 text-sm text-slate-400">{ev.description}</p>}
-              <p className={`mt-2 text-xs ${ev.bettingOpen ? 'text-slate-500' : 'text-amber-400'}`}>
-                {ev.bettingOpen ? `Ставки до ${fmtDate(ev.deadline)}` : 'Ставки закрыты, ждём результат'}
+              <p className={`mt-2 text-xs ${ev.bettingOpen || closed ? 'text-slate-500' : 'text-amber-400'}`}>
+                {ev.bettingOpen
+                  ? `Ставки до ${fmtDate(ev.deadline)}`
+                  : closed
+                    ? (ev.refunded || ev.status === 'cancelled' ? 'Ставки возвращены' : 'Событие закрыто')
+                    : 'Ставки закрыты, ждём результат'}
                 {' · '}банк: {fmt(ev.totalPool)}
                 {ev.payoutMode === 'odds' && <span className="text-yellow-300"> · фикс. коэффициент</span>}
               </p>
@@ -134,6 +161,7 @@ export default function Predictions({ active, balance, onBalance }) {
               <div className="mt-3 space-y-2">
                 {ev.options.map((o) => {
                   const isMine = mine?.optionId === o.id;
+                  const isWinner = ev.winningOptionId === o.id;
                   const locked = !ev.bettingOpen || (mine && !isMine);
                   const selected = sel?.eventId === ev.id && sel.optionId === o.id;
                   return (
@@ -146,11 +174,11 @@ export default function Predictions({ active, balance, onBalance }) {
                         setMsg(null);
                       }}
                       className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm
-                        ${selected ? 'bg-yellow-400/20 ring-1 ring-yellow-400' : isMine ? 'bg-emerald-500/15 ring-1 ring-emerald-500/50' : 'bg-slate-900/70'}
-                        ${locked ? 'opacity-50' : 'active:bg-slate-700'}`}
+                        ${selected ? 'bg-yellow-400/20 ring-1 ring-yellow-400' : isMine || isWinner ? 'bg-emerald-500/15 ring-1 ring-emerald-500/50' : 'bg-slate-900/70'}
+                        ${locked && !isWinner && !isMine ? 'opacity-50' : locked ? '' : 'active:bg-slate-700'}`}
                     >
                       <span>
-                        {o.title}
+                        {isWinner ? '✓ ' : ''}{o.title}
                         {isMine && (
                           <span className="ml-2 text-xs text-emerald-300">
                             твоя ставка {fmt(mine.amount)}
@@ -169,6 +197,16 @@ export default function Predictions({ active, balance, onBalance }) {
 
               {mine && ev.bettingOpen && (
                 <p className="mt-2 text-xs text-slate-500">Можно докинуть монет только на свой вариант.</p>
+              )}
+              {mine && closed && mine.payout !== null && (
+                <p className={`mt-2 text-xs ${
+                  ev.refunded || ev.status === 'cancelled' ? 'text-amber-300' : mine.payout > 0 ? 'text-emerald-300' : 'text-red-300'}`}>
+                  {ev.refunded || ev.status === 'cancelled'
+                    ? 'Твоя ставка вернулась'
+                    : mine.payout > 0
+                      ? `Ты выиграл: +${fmt(mine.payout)}`
+                      : `Ставка не сыграла: −${fmt(mine.amount - mine.freeAmount)}`}
+                </p>
               )}
 
               {panelOpen && (
@@ -228,12 +266,14 @@ export default function Predictions({ active, balance, onBalance }) {
           );
         })}
       </div>
+      )}
 
-
-      {history.length > 0 && (
-        <div className="pb-4">
-          <p className="text-sm font-semibold text-slate-300">Мои ставки</p>
-          <div className="mt-3 space-y-2">
+      {view === 'mine' && (
+        <div className="mt-4 pb-4">
+          {history.length === 0 && (
+            <p className="mt-2 text-center text-sm text-slate-500">Ты ещё не делал ставок. Выбери событие во вкладке «События».</p>
+          )}
+          <div className="space-y-2">
             {history.map((b) => {
               const chip = {
                 pending: { text: 'ждём результат', cls: 'bg-slate-600/40 text-slate-300' },

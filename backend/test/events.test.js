@@ -75,6 +75,18 @@ test('toPlayerView: множители, пул, моя ставка, стату�
   assert.equal(b.bettingOpen, false);            // дедлайн прошёл
   assert.equal(b.myBet, null);
   assert.deepEqual(b.options.map((o) => o.multiplier), [null, null]); // пустые пулы, без деления на 0
+  assert.equal(a.status, 'open');                // старые записи без статуса считаются открытыми
+});
+
+test('toPlayerView: закрытое событие — ставки закрыты, виден победитель', () => {
+  const [e] = toPlayerView(
+    [{ id: 1, title: 'A', deadline: '2030-01-01T00:00:00Z', status: 'resolved', winning_option_id: 2,
+      options: [{ id: 1, title: 'Да', pool: 100 }, { id: 2, title: 'Нет', pool: 50 }] }],
+    new Map(),
+  );
+  assert.equal(e.bettingOpen, false); // дедлайн впереди, но событие уже закрыто
+  assert.equal(e.status, 'resolved');
+  assert.equal(e.winningOptionId, 2);
 });
 
 test('toPlayerView: режим коэффициентов — множитель берётся из кэфа варианта, не из банка', () => {

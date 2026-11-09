@@ -41,12 +41,16 @@ export function toPlayerView(events, myBets, now = Date.now()) {
   return events.map((e) => {
     const totalPool = e.options.reduce((sum, o) => sum + Number(o.pool), 0);
     const fixedOdds = e.payout_mode === 'odds';
+    const status = e.status ?? 'open';
     return {
       id: e.id,
       title: e.title,
       description: e.description,
       deadline: e.deadline,
-      bettingOpen: new Date(e.deadline).getTime() > now,
+      status,
+      refunded: Boolean(e.refunded),
+      winningOptionId: e.winning_option_id ?? null,
+      bettingOpen: status === 'open' && new Date(e.deadline).getTime() > now,
       payoutMode: fixedOdds ? 'odds' : 'pool',
       totalPool,
       myBet: myBets.get(e.id) ?? null,

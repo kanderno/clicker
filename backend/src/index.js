@@ -382,6 +382,51 @@ app.post(
   },
 );
 
+// ---------- Уведомления (результаты ставок и др.) ----------
+app.get('/notices/unseen', { preHandler: app.authenticate }, async (req, reply) => {
+  const [rowsRes, meRes] = await Promise.all([
+    supabase
+      .from('notices')
+      .select('id, kind, amount, title, body, created_at')
+      .eq('user_id', req.user.uid)
+      .eq('seen', false)
+      .order('id', { ascending: true })
+      .limit(50),
+    supabase.from('users').select('balance').eq('id', req.user.uid).single(),
+  ]);
+  if (rowsRes.error || meRes.error) {
+    req.log.error(rowsRes.error || meRes.error, 'unseen notices failed');
+    return reply.code(500).send({ error: 'db_error' });
+  }
+  return {
+    balance: meRes.data.balance,
+    notices: rowsRes.data.map((n) => ({ ...n, amount: Number(n.amount) })),
+  };
+});
+
+app.post(
+  '/notices/seen',
+  {
+    preHandler: app.authenticate,
+    schema: {
+      body: { type: 'object', required: ['upToId'], properties: { upToId: { type: 'integer', minimum: 1 } } },
+    },
+  },
+  async (req, reply) => {
+    const { error } = await supabase
+      .from('notices')
+      .update({ seen: true })
+      .eq('user_id', req.user.uid)
+      .eq('seen', false)
+      .lte('id', req.body.upToId);
+    if (error) {
+      req.log.error(error, 'mark notices seen failed');
+      return reply.code(500).send({ error: 'db_error' });
+    }
+    return { ok: true };
+  },
+);
+
 // ---------- Переводы между игроками ----------
 const TRANSFER_ERRORS = [
   'bad_amount', 'bad_comment', 'self_transfer', 'insufficient_funds',
@@ -560,22 +605,30 @@ const BET_ERRORS = [
 ];
 
 // Ставки и пулы видны всем. Множитель только для отображения: итоговая выплата считается при закрытии.
+// Открытые и недавно закрытые события одним списком: самые новые сверху, старые и закрытые ниже.
+const CLOSED_EVENTS_SHOWN = 20;
 app.get('/events', { preHandler: app.authenticate }, async (req, reply) => {
-  const { events, error } = await listEventsWithOptions(supabase, {
-    statuses: ['open'],
-    orderBy: 'deadline',
-    ascending: true,
-  });
+  const [openRes, closedRes] = await Promise.all([
+    listEventsWithOptions(supabase, { statuses: ['open'], orderBy: 'id', ascending: false }),
+    listEventsWithOptions(supabase, {
+      statuses: ['resolved', 'cancelled'],
+      orderBy: 'id',
+      ascending: false,
+      limit: CLOSED_EVENTS_SHOWN,
+    }),
+  ]);
+  const error = openRes.error || closedRes.error;
   if (error) {
     req.log.error(error, 'events list failed');
     return reply.code(500).send({ error: 'db_error' });
   }
+  const events = [...openRes.events, ...closedRes.events].sort((a, b) => b.id - a.id);
 
   const mine = new Map();
   if (events.length) {
     const { data: bets, error: betsErr } = await supabase
       .from('bets')
-      .select('event_id, option_id, amount, free_amount')
+      .select('event_id, option_id, amount, free_amount, payout')
       .eq('user_id', req.user.uid)
       .in('event_id', events.map((e) => e.id));
     if (betsErr) {
@@ -583,7 +636,12 @@ app.get('/events', { preHandler: app.authenticate }, async (req, reply) => {
       return reply.code(500).send({ error: 'db_error' });
     }
     for (const b of bets) {
-      mine.set(b.event_id, { optionId: b.option_id, amount: b.amount, freeAmount: b.free_amount });
+      mine.set(b.event_id, {
+        optionId: b.option_id,
+        amount: Number(b.amount),
+        freeAmount: Number(b.free_amount),
+        payout: b.payout === null ? null : Number(b.payout),
+      });
     }
   }
 
