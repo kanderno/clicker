@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import WebApp from '@twa-dev/sdk';
-import { getWheel, spinWheel } from './api.js';
+import { assetUrl, getWheel, spinWheel } from './api.js';
 import Coin from './Coin.jsx';
-import { centerAngle, formatCountdown, labelFontSize, nextRotation, sectorPath } from './wheelMath.js';
+import { centerAngle, formatCountdown, labelFontSize, nextRotation, polar, sectorPath } from './wheelMath.js';
 
 const SPIN_MS = 4200;
-// 10 цветов: при 9 секторах первый и последний (они соседи) не совпадают
-const COLORS = ['#ffc62e', '#22b573', '#3f8fd6', '#a06ad4', '#e05a52', '#1fa8a1', '#f0b429', '#5b74c9', '#e8843c', '#c0578f'];
+// Бежевые сектора и тёмный обод, как в референсе заказчика. При нечётном числе секторов
+// берём три оттенка, чтобы первый и последний (они соседи) не совпали.
+const SECTOR_COLORS = (n) => (n % 2 === 0 ? ['#f4e6c8', '#e3c48e'] : ['#f4e6c8', '#e3c48e', '#d2a96a']);
 const fmt = (n) => Number(n).toLocaleString('ru-RU');
 
 const ERRORS = {
@@ -101,28 +102,43 @@ export default function Wheel({ active, balance, onBalance }) {
         Кошелёк: <Coin className="w-4 h-4" /> <span className="font-semibold text-yellow-400">{fmt(balance)}</span>
       </p>
 
-      <div className="relative mx-auto mt-6 h-72 w-72">
-        {/* указатель */}
-        <div className="absolute left-1/2 top-[-6px] z-10 -translate-x-1/2"
-          style={{ width: 0, height: 0, borderLeft: '14px solid transparent', borderRight: '14px solid transparent', borderTop: '26px solid #ffc62e', filter: 'drop-shadow(0 2px 3px rgba(0,0,0,.5))' }} />
-        <svg viewBox="0 0 300 300" className="h-full w-full drop-shadow-[0_0_30px_rgba(251,191,36,0.25)]"
-          style={{ transform: `rotate(${rotation}deg)`, transition: `transform ${SPIN_MS}ms cubic-bezier(0.12, 0.6, 0.1, 1)` }}>
-          <circle cx="150" cy="150" r="146" fill="#0f1b2d" stroke="#d5ad31" strokeWidth="4" />
-          {n === 0 && <text x="150" y="155" textAnchor="middle" fill="#64748b" fontSize="14">загрузка…</text>}
-          {prizes.map((p, i) => (
-            <g key={p.id}>
-              <path d={sectorPath(i, n, 150, 150, 140)} fill={COLORS[i % COLORS.length]} stroke="#0f172a" strokeWidth="2" />
-              <text
-                transform={`rotate(${centerAngle(i, n)} 150 150)`}
-                x="150" y="48" textAnchor="middle" fill="#0f172a" fontSize={labelFontSize(p.label.length, n)} fontWeight="800"
-                fontFamily="system-ui, sans-serif"
-              >
-                {p.label}
-              </text>
-            </g>
-          ))}
-          <circle cx="150" cy="150" r="22" fill="#14243c" stroke="#ffc62e" strokeWidth="4" />
+      <div className="wheel-wrap">
+        {/* указатель-булавка сверху */}
+        <svg viewBox="0 0 40 52" className="wheel-pin" aria-hidden="true">
+          <path d="M20 50 6 22a15 15 0 1128 0Z" fill="#fff" stroke="#2b2622" strokeWidth="3" />
+          <circle cx="20" cy="17" r="5" fill="#2b2622" />
         </svg>
+        <svg viewBox="0 0 300 300" className="wheel-disc"
+          style={{ transform: `rotate(${rotation}deg)`, transition: `transform ${SPIN_MS}ms cubic-bezier(0.12, 0.6, 0.1, 1)` }}>
+          <circle cx="150" cy="150" r="148" fill="#2b2622" />
+          {n === 0 && <text x="150" y="155" textAnchor="middle" fill="#cbb995" fontSize="14">загрузка…</text>}
+          {prizes.map((p, i) => {
+            const colors = SECTOR_COLORS(n);
+            const fontSize = labelFontSize(p.label.length, n) * (p.image_url ? 0.75 : 1);
+            return (
+              <g key={p.id}>
+                <path d={sectorPath(i, n, 150, 150, 136)} fill={colors[i % colors.length]} stroke="#8a6a3a" strokeWidth="1.2" />
+                <g transform={`rotate(${centerAngle(i, n)} 150 150)`}>
+                  {p.image_url && (
+                    <image href={assetUrl(p.image_url)} x="132" y="30" width="36" height="36" preserveAspectRatio="xMidYMid meet" />
+                  )}
+                  <text x="150" y={p.image_url ? 80 : 50} textAnchor="middle" fill="#3b2a12" fontSize={fontSize}
+                    fontWeight="800" fontFamily="Manrope, system-ui, sans-serif">
+                    {p.label}
+                  </text>
+                </g>
+              </g>
+            );
+          })}
+          {/* болты на ободе между секторами */}
+          {prizes.map((p, i) => {
+            const [x, y] = polar(150, 150, 142, (360 / n) * i);
+            return <circle key={`b${p.id}`} cx={x} cy={y} r="3.2" fill="#d8b878" />;
+          })}
+          <circle cx="150" cy="150" r="24" fill="#2b2622" stroke="#d8b878" strokeWidth="4" />
+          <circle cx="150" cy="150" r="8" fill="#d8b878" />
+        </svg>
+        <span className="wheel-stand" aria-hidden="true" />
       </div>
 
       <div className="mt-6 text-center">

@@ -122,3 +122,17 @@ export const collectLocations = () => request('/locations/collect', { method: 'P
 
 // Картинки, загруженные админом, лежат на нашем сервере (/img/…): в разработке нужен префикс прокси.
 export const assetUrl = (url) => (url && url.startsWith('/img/') ? `${BASE}${url}` : url);
+
+// ---------- Админка: призы колеса, цены, локации, лиги, картинки ----------
+const json = (method, body) => ({ method, body: JSON.stringify(body) });
+export const getConfig = () => request('/config');
+export const adminGetGame = () => request('/admin/game');
+export const adminSaveSettings = (values) => request('/admin/settings', json('PUT', values));
+export const adminCreatePrize = (p) => request('/admin/prizes', json('POST', p));
+export const adminUpdatePrize = (id, p) => request(`/admin/prizes/${id}`, json('PATCH', p));
+export const adminCreateLocation = (p) => request('/admin/locations', json('POST', p));
+export const adminUpdateLocation = (id, p) => request(`/admin/locations/${id}`, json('PATCH', p));
+export const adminCreateLeague = (p) => request('/admin/leagues', json('POST', p));
+export const adminUpdateLeague = (id, p) => request(`/admin/leagues/${id}`, json('PATCH', p));
+export const adminDeleteLeague = (id) => request(`/admin/leagues/${id}`, { method: 'DELETE' });
+export const adminUploadImage = (mime, data) => request('/admin/images', json('POST', { mime, data }));

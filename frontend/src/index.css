@@ -116,6 +116,8 @@ input::placeholder, textarea::placeholder { color: var(--muted-2); opacity: 1; }
   scrollbar-width: none;
 }
 .game-screen::-webkit-scrollbar { display: none; }
+/* экран прокручивается: блоки не сжимаем (иначе карточка баланса с overflow:hidden схлопывается) */
+.game-screen > * { flex-shrink: 0; }
 
 .game-header, .brand-lockup, .balance-topline, .balance-value { display: flex; align-items: center; }
 .game-header { justify-content: space-between; min-height: 42px; }
@@ -824,3 +826,138 @@ input, textarea {
 .loc-card-bottom { display: flex; align-items: center; padding-top: 8px; border-top: 1px solid var(--line); }
 .loc-card-lvl { padding-right: 10px; border-right: 1px solid var(--line); font-size: 13px; font-weight: 800; }
 .loc-card-price { display: flex; align-items: center; gap: 5px; padding-left: 10px; font-size: 14px; font-weight: 800; }
+
+/* ---------- светлая тема (переключатель в шапке главного экрана) ---------- */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f5efe1;
+  --bg-deep: #ece4d0;
+  --surface: #ffffff;
+  --surface-2: #fbf6ea;
+  --surface-3: #fffdf7;
+  --line: #e2d5b8;
+  --line-soft: rgba(184, 130, 20, .18);
+  --ink: #2a2112;
+  --ink-soft: #4a3d26;
+  --muted: #7a6a4d;
+  --muted-2: #998a6c;
+  --green: #12935a;
+  --red: #d23f3f;
+  --gold-ink: #a56a00;
+  --line-faint: rgba(226, 213, 184, .8);
+  --shadow-hard: rgba(140, 110, 50, .16);
+}
+:root[data-theme="light"] .app-shell {
+  background:
+    radial-gradient(120% 60% at 50% -10%, rgba(255, 198, 46, .30), transparent 58%),
+    linear-gradient(180deg, #fbf4e2 0%, var(--bg) 46%, #efe6d2 100%);
+}
+:root[data-theme="light"] .app-shell::before { background: linear-gradient(105deg, rgba(255, 198, 46, .18), transparent 70%); }
+:root[data-theme="light"] .app-shell::after { background: linear-gradient(255deg, rgba(255, 160, 60, .10), transparent 68%); }
+:root[data-theme="light"] .player-avatar,
+:root[data-theme="light"] .avatar-fallback { background: linear-gradient(160deg, #fff6dc, #f3e4bd); color: #8a5a00; box-shadow: none; }
+:root[data-theme="light"] .balance-card {
+  background: linear-gradient(165deg, #fffdf7 0%, #fbf3df 100%);
+  box-shadow: 0 4px 0 rgba(140, 110, 50, .18), 0 14px 30px rgba(140, 110, 50, .12);
+}
+:root[data-theme="light"] .balance-value { color: var(--ink); text-shadow: none; }
+:root[data-theme="light"] .balance-stats b { color: var(--gold-ink); }
+:root[data-theme="light"] .app-nav { border-top-color: var(--line); background: linear-gradient(180deg, #fffaf0, #f6eedb); box-shadow: 0 -8px 24px rgba(140, 110, 50, .14); }
+:root[data-theme="light"] .app-nav-item, :root[data-theme="light"] .nav-icon { color: #8b7a5a; }
+:root[data-theme="light"] .app-nav-item.is-active { color: #8a5a00; }
+:root[data-theme="light"] .app-nav-item.is-active .nav-icon { color: #2a1c02; }
+:root[data-theme="light"] .text-slate-300 { color: #5a4b31 !important; }
+:root[data-theme="light"] .text-slate-600 { color: #8b7a5a !important; }
+:root[data-theme="light"] .text-yellow-300, :root[data-theme="light"] .text-yellow-400,
+:root[data-theme="light"] .text-amber-300, :root[data-theme="light"] .text-amber-400 { color: var(--gold-ink) !important; }
+:root[data-theme="light"] .bg-slate-950, :root[data-theme="light"] .bg-slate-900,
+:root[data-theme="light"] .bg-slate-900\/70, :root[data-theme="light"] .bg-slate-900\/60 { background-color: var(--surface-2) !important; }
+:root[data-theme="light"] .bg-slate-700, :root[data-theme="light"] .bg-slate-700\/60 { background-color: #f1e7cf !important; }
+:root[data-theme="light"] .bg-slate-600, :root[data-theme="light"] .bg-slate-600\/40 { background-color: #e8dbbc !important; }
+:root[data-theme="light"] [class~="active:bg-slate-700"]:active { background-color: #ebdfc3 !important; }
+:root[data-theme="light"] input, :root[data-theme="light"] textarea, :root[data-theme="light"] select { background-color: #fffdf8 !important; }
+:root[data-theme="light"] .ring-slate-700, :root[data-theme="light"] .ring-slate-700\/60 { --tw-ring-color: #e2d5b8 !important; }
+:root[data-theme="light"] .game-toast.is-ok { background: #e6f7ee; color: #0d6e42; }
+:root[data-theme="light"] .game-toast.is-error { background: #fdeaea; color: #a32828; }
+:root[data-theme="light"] .lb-row.is-me { background: rgba(255, 198, 46, .18); }
+:root[data-theme="light"] .loc-screen { background: linear-gradient(180deg, rgba(232, 116, 40, .22) 0, rgba(232, 116, 40, .05) 120px, transparent 220px); }
+@media (min-width: 561px) {
+  :root[data-theme="light"] .app-shell { border-color: var(--line); box-shadow: 0 30px 90px rgba(120, 90, 30, .25); }
+}
+
+.theme-toggle {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--gold-ink);
+  cursor: pointer;
+}
+.theme-toggle svg { width: 19px; height: 19px; }
+.header-actions { display: flex; align-items: center; gap: 8px; }
+.app-mark-img { width: 40px; height: 40px; border-radius: 12px; object-fit: cover; }
+
+/* ---------- админка: настройки игры ---------- */
+.admin-section {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  padding: 12px 14px;
+}
+.admin-section > summary { font-weight: 700; font-size: 14px; cursor: pointer; list-style-position: inside; }
+.admin-card { padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
+.admin-field { display: flex; flex-direction: column; gap: 3px; color: var(--muted); font-size: 11px; }
+.admin-save {
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 10px;
+  background: linear-gradient(170deg, #ffe082, var(--gold) 55%, #f0a80e);
+  color: #221607;
+  font-size: 13px;
+  font-weight: 800;
+  box-shadow: 0 2px 0 #6b4a00;
+  cursor: pointer;
+}
+.admin-save:disabled { opacity: .5; }
+.admin-img { display: flex; align-items: center; gap: 6px; }
+.admin-img img, .admin-img-empty {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  object-fit: contain;
+  color: var(--muted-2);
+  font-size: 10px;
+}
+.admin-img-btn {
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* ---------- колесо: бежевое, тёмный обод, подставка ---------- */
+.wheel-wrap { position: relative; width: 288px; height: 318px; margin: 22px auto 0; }
+.wheel-disc { position: relative; z-index: 1; width: 288px; height: 288px; filter: drop-shadow(0 12px 22px rgba(0, 0, 0, .35)); }
+.wheel-pin { position: absolute; top: -18px; left: 50%; z-index: 2; width: 34px; height: 44px; transform: translateX(-50%); filter: drop-shadow(0 3px 3px rgba(0, 0, 0, .4)); }
+.wheel-stand {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 150px;
+  height: 46px;
+  transform: translateX(-50%);
+  background:
+    linear-gradient(#2b2622, #2b2622) 50% 0 / 26px 30px no-repeat,
+    radial-gradient(ellipse at 50% 100%, #2b2622 0 62%, transparent 63%) 50% 100% / 150px 30px no-repeat;
+}

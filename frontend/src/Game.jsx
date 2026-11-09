@@ -1,6 +1,7 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { forwardRef, useCallback, useContext, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import WebApp from '@twa-dev/sdk';
-import { buySteal, claimStreak, getGameState, login, sendTaps, stealFrom, upgradeTap } from './api.js';
+import { assetUrl, buySteal, claimStreak, getGameState, login, sendTaps, stealFrom, upgradeTap } from './api.js';
+import { AssetsContext } from './assets.js';
 import Coin from './Coin.jsx';
 import Avatar, { displayName } from './Avatar.jsx';
 import Leaderboard, { MaskIcon } from './Leaderboard.jsx';
@@ -38,7 +39,8 @@ function haptic(kind) {
 
 // balance: подтверждённый сервером баланс (хранится в App). pending: тапы, ещё не отправленные.
 // Показываем balance + pending × сила удара только для отклика интерфейса; истина всегда на сервере.
-const Game = forwardRef(function Game({ user, active, balance, onBalance, onGift }, ref) {
+const Game = forwardRef(function Game({ user, active, balance, onBalance, onGift, theme, onToggleTheme }, ref) {
+  const { logoUrl } = useContext(AssetsContext);
   const [pending, setPending] = useState(0);
   const [syncError, setSyncError] = useState(null); // код ошибки или null
   const [floaters, setFloaters] = useState([]);
@@ -173,13 +175,30 @@ const Game = forwardRef(function Game({ user, active, balance, onBalance, onGift
     <div className="game-screen">
       <header className="game-header">
         <div className="brand-lockup">
-          <span className="app-mark" aria-hidden="true">PM</span>
+          {logoUrl
+            ? <img src={assetUrl(logoUrl)} alt="" className="app-mark-img" />
+            : <span className="app-mark" aria-hidden="true">PM</span>}
           <span>
             <span className="brand-title">PELMEN MARKET</span>
             <span className="brand-caption">ПЕЛЬМЕННЫЙ ЦЕХ</span>
           </span>
         </div>
-        <Avatar user={user} className="player-avatar" />
+        <span className="header-actions">
+          <button type="button" className="theme-toggle" onClick={onToggleTheme}
+            aria-label={theme === 'light' ? 'Включить тёмную тему' : 'Включить светлую тему'}>
+            {theme === 'light' ? (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                <path d="M20 14.5A8 8 0 019.5 4a8 8 0 1010.5 10.5Z" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="4" />
+                <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+              </svg>
+            )}
+          </button>
+          <Avatar user={user} className="player-avatar" />
+        </span>
       </header>
 
       <section className="balance-card" aria-label="Текущий баланс">

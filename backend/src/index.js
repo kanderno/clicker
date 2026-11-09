@@ -11,6 +11,7 @@ import { validateInitData } from './telegram.js';
 import { listEventsWithOptions, toMyBetsView, toPlayerView } from './events.js';
 import { buildMinersView } from './miners.js';
 import { buildLeaderboard } from './leaderboard.js';
+import { isImageUrl, settingsView, validateSettings } from './adminGame.js';
 import { createTelegramApi, handleUpdate, isHttpsUrl, secretMatches } from './bot.js';
 
 const app = Fastify({ logger: true, trustProxy: true });
@@ -476,7 +477,7 @@ app.get('/wheel', { preHandler: app.authenticate, config: wheelLimit }, async (r
   const [stateRes, prizesRes] = await Promise.all([
     supabase.rpc('wheel_state', { p_user: req.user.uid }),
     // Веса (шансы) игроку не отдаём: только то, что нужно для отрисовки секторов.
-    supabase.from('prizes').select('id, kind, value, label').eq('active', true).order('sort').order('id'),
+    supabase.from('prizes').select('id, kind, value, label, image_url').eq('active', true).order('sort').order('id'),
   ]);
   if (stateRes.error || !stateRes.data?.length || prizesRes.error) {
     req.log.error(stateRes.error || prizesRes.error, 'wheel state failed');
@@ -1206,6 +1207,261 @@ app.get('/admin/coins/history', { preHandler: adminOnly }, async (req, reply) =>
       user: byId.get(g.user_id) ?? null,
     })),
   };
+});
+
+// ---------- Админка: призы колеса, цены, локации, лиги, картинки ----------
+function dbFail(req, reply, error, what) {
+  // 23514 — нарушен CHECK в таблице (например, приз-монеты с нулевым значением), 23505 — повтор уникального поля
+  if (error?.code === '23514' || error?.code === '23505') return reply.code(400).send({ error: 'bad_value' });
+  if (error?.code === '23503') return reply.code(409).send({ error: 'in_use' });
+  req.log.error(error, what);
+  return reply.code(500).send({ error: 'db_error' });
+}
+const adminLimit = { rateLimit: { max: 60, timeWindow: '1 minute' } };
+const imageUrlProp = { anyOf: [{ type: 'null' }, { type: 'string', maxLength: 500 }] };
+
+async function loadSettings() {
+  const { data, error } = await supabase.from('settings').select('key, value');
+  return { settings: data ? settingsView(data) : null, error };
+}
+
+app.get('/admin/game', { preHandler: adminOnly }, async (req, reply) => {
+  const [{ settings, error }, prizes, locations, leagues] = await Promise.all([
+    loadSettings(),
+    supabase.from('prizes').select('id, kind, value, weight, label, sort, active, image_url').order('sort').order('id'),
+    supabase.from('location_types')
+      .select('id, code, name, image_url, base_price, base_income, max_level, sort, active').order('sort').order('id'),
+    supabase.from('leagues').select('id, name, min_peak, reward_1, reward_2, reward_3').order('min_peak'),
+  ]);
+  const failed = error || [prizes, locations, leagues].find((r) => r.error)?.error;
+  if (failed) return dbFail(req, reply, failed, 'admin game failed');
+  return { settings, prizes: prizes.data, locations: locations.data, leagues: leagues.data };
+});
+
+app.put('/admin/settings', { preHandler: adminOnly, config: adminLimit }, async (req, reply) => {
+  const { settings, error } = await loadSettings();
+  if (error) return dbFail(req, reply, error, 'settings load failed');
+  const check = validateSettings(req.body, settings);
+  if (check.error) return reply.code(400).send({ error: check.error, key: check.key });
+  if (check.rows.length) {
+    const now = new Date().toISOString();
+    const { error: upErr } = await supabase.from('settings')
+      .upsert(check.rows.map((r) => ({ ...r, updated_at: now })), { onConflict: 'key' });
+    if (upErr) return dbFail(req, reply, upErr, 'settings save failed');
+    req.log.info({ admin: req.user.tg, keys: check.rows.map((r) => r.key) }, 'settings changed');
+  }
+  return { settings: { ...settings, ...Object.fromEntries(check.rows.map((r) => [r.key, r.value])) } };
+});
+
+// Призы колеса. Удалять нельзя (на них ссылается история спинов) — только выключать.
+const prizeProps = {
+  kind: { type: 'string', enum: ['coins', 'free_bet', 'steal'] },
+  value: { type: 'integer', minimum: 0, maximum: 1000000000000 },
+  weight: { type: 'integer', minimum: 1, maximum: 1000000 },
+  label: { type: 'string', minLength: 1, maxLength: 40 },
+  sort: { type: 'integer', minimum: -1000, maximum: 1000 },
+  active: { type: 'boolean' },
+  imageUrl: imageUrlProp,
+};
+const prizeRow = (b) => {
+  const row = {};
+  for (const k of ['kind', 'value', 'weight', 'label', 'sort', 'active']) if (b[k] !== undefined) row[k] = b[k];
+  if (b.imageUrl !== undefined) row.image_url = b.imageUrl;
+  if (row.label !== undefined) row.label = row.label.trim();
+  return row;
+};
+
+app.post(
+  '/admin/prizes',
+  {
+    preHandler: adminOnly,
+    config: adminLimit,
+    schema: { body: { type: 'object', required: ['kind', 'value', 'weight', 'label'], properties: prizeProps } },
+  },
+  async (req, reply) => {
+    if (!isImageUrl(req.body.imageUrl ?? null)) return reply.code(400).send({ error: 'bad_image' });
+    const { data, error } = await supabase.from('prizes').insert(prizeRow(req.body)).select('id').single();
+    if (error) return dbFail(req, reply, error, 'prize insert failed');
+    return { id: data.id };
+  },
+);
+
+app.patch(
+  '/admin/prizes/:id',
+  {
+    preHandler: adminOnly,
+    config: adminLimit,
+    schema: { params: idParams, body: { type: 'object', minProperties: 1, properties: prizeProps } },
+  },
+  async (req, reply) => {
+    if (req.body.imageUrl !== undefined && !isImageUrl(req.body.imageUrl)) {
+      return reply.code(400).send({ error: 'bad_image' });
+    }
+    const { data, error } = await supabase.from('prizes').update(prizeRow(req.body)).eq('id', req.params.id).select('id');
+    if (error) return dbFail(req, reply, error, 'prize update failed');
+    if (!data.length) return reply.code(404).send({ error: 'not_found' });
+    return { ok: true };
+  },
+);
+
+// Локации: название, цены, доход, картинка. Выключенную новые игроки купить не смогут.
+const locationProps = {
+  name: { type: 'string', minLength: 1, maxLength: 40 },
+  basePrice: { type: 'integer', minimum: 1, maximum: 1000000000000 },
+  baseIncome: { type: 'integer', minimum: 1, maximum: 1000000000000 },
+  maxLevel: { type: 'integer', minimum: 1, maximum: 1000 },
+  sort: { type: 'integer', minimum: -1000, maximum: 1000 },
+  active: { type: 'boolean' },
+  imageUrl: imageUrlProp,
+};
+const LOCATION_COLUMNS = {
+  name: 'name', basePrice: 'base_price', baseIncome: 'base_income', maxLevel: 'max_level',
+  sort: 'sort', active: 'active', imageUrl: 'image_url',
+};
+const locationRow = (b) => {
+  const row = {};
+  for (const [k, col] of Object.entries(LOCATION_COLUMNS)) {
+    if (b[k] !== undefined) row[col] = k === 'name' ? b[k].trim() : b[k];
+  }
+  return row;
+};
+
+app.post(
+  '/admin/locations',
+  {
+    preHandler: adminOnly,
+    config: adminLimit,
+    schema: { body: { type: 'object', required: ['name', 'basePrice', 'baseIncome'], properties: locationProps } },
+  },
+  async (req, reply) => {
+    if (!isImageUrl(req.body.imageUrl ?? null)) return reply.code(400).send({ error: 'bad_image' });
+    const row = { ...locationRow(req.body), code: `loc_${Date.now().toString(36)}` };
+    const { data, error } = await supabase.from('location_types').insert(row).select('id').single();
+    if (error) return dbFail(req, reply, error, 'location insert failed');
+    return { id: data.id };
+  },
+);
+
+app.patch(
+  '/admin/locations/:id',
+  {
+    preHandler: adminOnly,
+    config: adminLimit,
+    schema: { params: idParams, body: { type: 'object', minProperties: 1, properties: locationProps } },
+  },
+  async (req, reply) => {
+    if (req.body.imageUrl !== undefined && !isImageUrl(req.body.imageUrl)) {
+      return reply.code(400).send({ error: 'bad_image' });
+    }
+    const { data, error } = await supabase.from('location_types').update(locationRow(req.body))
+      .eq('id', req.params.id).select('id');
+    if (error) return dbFail(req, reply, error, 'location update failed');
+    if (!data.length) return reply.code(404).send({ error: 'not_found' });
+    return { ok: true };
+  },
+);
+
+// Лиги: порог (максимальный баланс за всё время) и недельные награды за 1–3 место.
+const leagueProps = {
+  name: { type: 'string', minLength: 1, maxLength: 40 },
+  minPeak: { type: 'integer', minimum: 0, maximum: 1000000000000000 },
+  rewards: { type: 'array', minItems: 3, maxItems: 3, items: { type: 'integer', minimum: 0, maximum: 1000000000000 } },
+};
+const leagueRow = (b) => ({
+  ...(b.name !== undefined ? { name: b.name.trim() } : {}),
+  ...(b.minPeak !== undefined ? { min_peak: b.minPeak } : {}),
+  ...(b.rewards ? { reward_1: b.rewards[0], reward_2: b.rewards[1], reward_3: b.rewards[2] } : {}),
+});
+
+app.post(
+  '/admin/leagues',
+  {
+    preHandler: adminOnly,
+    config: adminLimit,
+    schema: { body: { type: 'object', required: ['name', 'minPeak', 'rewards'], properties: leagueProps } },
+  },
+  async (req, reply) => {
+    const { data, error } = await supabase.from('leagues').insert(leagueRow(req.body)).select('id').single();
+    if (error) return dbFail(req, reply, error, 'league insert failed');
+    return { id: data.id };
+  },
+);
+
+app.patch(
+  '/admin/leagues/:id',
+  {
+    preHandler: adminOnly,
+    config: adminLimit,
+    schema: { params: idParams, body: { type: 'object', minProperties: 1, properties: leagueProps } },
+  },
+  async (req, reply) => {
+    const { data, error } = await supabase.from('leagues').update(leagueRow(req.body)).eq('id', req.params.id).select('id');
+    if (error) return dbFail(req, reply, error, 'league update failed');
+    if (!data.length) return reply.code(404).send({ error: 'not_found' });
+    return { ok: true };
+  },
+);
+
+// Удалить можно только лигу, по которой ещё не было выплат.
+app.delete('/admin/leagues/:id', { preHandler: adminOnly, schema: { params: idParams } }, async (req, reply) => {
+  const { data, error } = await supabase.from('leagues').delete().eq('id', req.params.id).select('id');
+  if (error) return dbFail(req, reply, error, 'league delete failed');
+  if (!data.length) return reply.code(404).send({ error: 'not_found' });
+  return { ok: true };
+});
+
+// Загрузка картинки (base64 в JSON). SVG не принимаем: он может содержать скрипты.
+const IMAGE_MAX_BYTES = 700 * 1024;
+app.post(
+  '/admin/images',
+  {
+    preHandler: adminOnly,
+    config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
+    bodyLimit: 1024 * 1024,
+    schema: {
+      body: {
+        type: 'object',
+        required: ['mime', 'data'],
+        properties: {
+          mime: { type: 'string', enum: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] },
+          data: { type: 'string', minLength: 8, maxLength: 1000000 },
+        },
+      },
+    },
+  },
+  async (req, reply) => {
+    const { mime, data } = req.body;
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(data)) return reply.code(400).send({ error: 'bad_image' });
+    if (Buffer.byteLength(data, 'base64') > IMAGE_MAX_BYTES) return reply.code(400).send({ error: 'image_too_big' });
+    const { data: row, error } = await supabase.from('images').insert({ mime, data }).select('id').single();
+    if (error) return dbFail(req, reply, error, 'image insert failed');
+    return { url: `/img/${row.id}` };
+  },
+);
+
+// Картинки отдаются без JWT: их грузит тег <img>, который не умеет слать заголовок авторизации.
+// Картинка по id не меняется, поэтому кэшируется навсегда.
+app.get(
+  '/img/:id',
+  { config: { rateLimit: { max: 600, timeWindow: '1 minute' } }, schema: { params: idParams } },
+  async (req, reply) => {
+    const { data, error } = await supabase.from('images').select('mime, data').eq('id', req.params.id).maybeSingle();
+    if (error) return dbFail(req, reply, error, 'image load failed');
+    if (!data) return reply.code(404).send({ error: 'not_found' });
+    return reply
+      .header('Cache-Control', 'public, max-age=31536000, immutable')
+      .header('X-Content-Type-Options', 'nosniff')
+      .type(data.mime)
+      .send(Buffer.from(data.data, 'base64'));
+  },
+);
+
+// Оформление для всех игроков: свой логотип и монета (если админ загрузил).
+app.get('/config', { preHandler: app.authenticate }, async (req, reply) => {
+  const { data, error } = await supabase.from('settings').select('key, value').in('key', ['logo_url', 'coin_url']);
+  if (error) return dbFail(req, reply, error, 'config failed');
+  const byKey = new Map(data.map((r) => [r.key, r.value]));
+  return { logoUrl: byKey.get('logo_url') ?? null, coinUrl: byKey.get('coin_url') ?? null };
 });
 
 // ---------- Mini App: раздача собранного фронтенда ----------

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { adminCancelEvent, adminCreateEvent, adminDeleteEvent, adminListEvents, adminResolveEvent } from './api.js';
 import AdminCoins from './AdminCoins.jsx';
+import AdminGame from './AdminGame.jsx';
 
 const ERRORS = {
   bad_title: 'Название: от 3 до 200 символов',
@@ -210,11 +211,11 @@ export default function Admin({ active }) {
           </p>
           {options.map((o, i) => (
             <div key={i} className="flex gap-2">
-              <input className={inputCls} placeholder={`Вариант ${i + 1}`} value={o} maxLength={100}
+              <input className={`${inputCls} min-w-0 flex-1`} placeholder={`Вариант ${i + 1}`} value={o} maxLength={100}
                 onChange={(e) => setOption(i, e.target.value)} />
               {payoutMode === 'odds' && (
                 <input type="text" inputMode="decimal" aria-label={`Коэффициент варианта ${i + 1}`}
-                  className={`${inputCls} w-24 shrink-0 text-center tabular-nums`} placeholder="2.00"
+                  className={`${inputCls.replace('w-full ', '')} w-24 shrink-0 text-center tabular-nums`} placeholder="2.00"
                   value={odds[i] ?? ''} maxLength={7}
                   onChange={(e) => setOdd(i, e.target.value.replace(/[^\d.,]/g, '').slice(0, 7))} />
               )}
@@ -247,6 +248,8 @@ export default function Admin({ active }) {
       </div>
 
       <AdminCoins active={active} />
+
+      <AdminGame active={active} />
 
       <p className="mt-6 text-sm font-semibold text-slate-300">События</p>
       {events === null && <p className="mt-3 text-sm text-slate-500">Загрузка…</p>}

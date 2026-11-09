@@ -1,3 +1,7 @@
+import { useContext } from 'react';
+import { assetUrl } from './api.js';
+import { AssetsContext } from './assets.js';
+
 // Пелькоин: золотая монета с тиснёным пельменем.
 // Размеры считаем один раз при загрузке модуля, чтобы не дёргать DOM.
 const N = 16;
@@ -27,6 +31,8 @@ const crimpTicks = Array.from({ length: N }, (_, i) => {
 }).join('');
 
 export default function Coin({ className = '' }) {
+  const { coinUrl } = useContext(AssetsContext);
+  if (coinUrl) return <img src={assetUrl(coinUrl)} alt="" className={`${className} object-contain`} draggable="false" />;
   return (
     <svg viewBox="0 0 200 200" className={className} aria-hidden="true">
       <defs>

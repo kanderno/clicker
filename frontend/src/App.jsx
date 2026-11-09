@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  getUnseenNotices, getUnseenSteals, getUnseenTransfers, login, markNoticesSeen, markStealsSeen, markTransfersSeen,
+  getConfig, getUnseenNotices, getUnseenSteals, getUnseenTransfers, login, markNoticesSeen, markStealsSeen, markTransfersSeen,
 } from './api.js';
 import NoticesModal from './Notices.jsx';
+import { AssetsContext } from './assets.js';
 import Game from './Game.jsx';
 import Bank from './Bank.jsx';
 import Transfer, { userLabel } from './Transfer.jsx';
@@ -64,8 +65,32 @@ function TabIcon({ id }) {
   );
 }
 
+// Тема хранится только в этом браузере (localStorage может быть недоступен — тогда просто тёмная).
+function readTheme() {
+  try {
+    return localStorage.getItem('theme') === 'light' ? 'light' : 'dark';
+  } catch {
+    return 'dark';
+  }
+}
+
+function useTheme() {
+  const [theme, setTheme] = useState(readTheme);
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    try {
+      localStorage.setItem('theme', theme);
+    } catch {
+      /* без сохранения: тема продержится до перезапуска */
+    }
+  }, [theme]);
+  return [theme, () => setTheme((t) => (t === 'light' ? 'dark' : 'light'))];
+}
+
 function Main({ user }) {
   const [tab, setTab] = useState('game');
+  const [theme, toggleTheme] = useTheme();
+  const [assets, setAssets] = useState({ logoUrl: null, coinUrl: null });
   const [balance, setBalance] = useState(user.balance); // баланс всегда приходит с сервера
   const gameRef = useRef(null);
   const [theft, setTheft] = useState(null); // { count, total, upToId }: показываем жертве, что у неё украли
@@ -113,6 +138,10 @@ function Main({ user }) {
     } catch {
       /* уведомление не критично: попробуем в следующий раз */
     }
+  }, []);
+
+  useEffect(() => {
+    getConfig().then(setAssets).catch(() => {}); // без своего оформления работают рисунки по умолчанию
   }, []);
 
   useEffect(() => {
@@ -178,11 +207,13 @@ function Main({ user }) {
   };
 
   return (
+    <AssetsContext.Provider value={assets}>
     <div className="app-shell">
       <main className="app-main flex-1 min-h-0">
         {/* Кликер не размонтируем: его таймер отправки тапов должен работать всегда */}
         <div className={tab === 'game' ? 'h-full' : 'hidden'}>
-          <Game ref={gameRef} user={user} active={tab === 'game'} balance={balance} onBalance={setBalance} onGift={giftTo} />
+          <Game ref={gameRef} user={user} active={tab === 'game'} balance={balance} onBalance={setBalance} onGift={giftTo}
+            theme={theme} onToggleTheme={toggleTheme} />
         </div>
         <div className={tab === 'bets' ? 'h-full' : 'hidden'}>
           <Predictions active={tab === 'bets'} balance={balance} onBalance={setBalance} />
@@ -269,6 +300,7 @@ function Main({ user }) {
         ))}
       </nav>
     </div>
+    </AssetsContext.Provider>
   );
 }
 
