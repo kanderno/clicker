@@ -401,6 +401,73 @@ app.post(
   },
 );
 
+// ---------- Локации (пассивный доход вместо майнеров) ----------
+const LOCATION_ERRORS = ['max_level', 'insufficient_funds', 'location_not_found', 'user_not_found'];
+function locationFail(req, reply, error, what) {
+  const code = LOCATION_ERRORS.find((c) => error?.message?.includes(c));
+  if (code) return reply.code(code.endsWith('not_found') ? 404 : 400).send({ error: code });
+  req.log.error(error, what);
+  return reply.code(500).send({ error: 'db_error' });
+}
+
+app.get('/locations', { preHandler: app.authenticate, config: minerLimit }, async (req, reply) => {
+  const uid = req.user.uid;
+  const [overview, state, leagues, cap] = await Promise.all([
+    supabase.rpc('locations_overview', { p_user: uid }),
+    supabase.rpc('game_state', { p_user: uid }),
+    supabase.from('leagues').select('min_peak'),
+    supabase.from('settings').select('value').eq('key', 'locations_cap_hours').maybeSingle(),
+  ]);
+  const failed = [overview, state, leagues, cap].find((r) => r.error);
+  if (failed || !state.data?.length) return locationFail(req, reply, failed?.error, 'locations view failed');
+
+  const st = state.data[0];
+  const peak = Number(st.peak_balance);
+  const nextMin = leagues.data.map((l) => Number(l.min_peak)).filter((m) => m > peak).sort((a, b) => a - b)[0];
+  const locations = overview.data.map((l) => ({
+    id: l.type_id,
+    code: l.code,
+    name: l.name,
+    imageUrl: l.image_url,
+    level: l.level,
+    maxLevel: l.max_level,
+    incomePerHour: Number(l.income_per_hour),
+    nextIncome: l.next_income === null ? null : Number(l.next_income),
+    upgradeCost: l.upgrade_cost === null ? null : Number(l.upgrade_cost),
+    pending: Number(l.pending),
+    pendingMax: Number(l.pending_max),
+  }));
+  return {
+    balance: Number(st.balance),
+    tapPower: Number(st.tap_power),
+    coinsToNext: nextMin === undefined ? null : nextMin - peak,
+    capHours: Number(cap.data?.value ?? 3),
+    profitPerHour: locations.reduce((sum, l) => sum + l.incomePerHour, 0),
+    pendingTotal: locations.reduce((sum, l) => sum + l.pending, 0),
+    locations,
+  };
+});
+
+app.post(
+  '/locations/:id/upgrade',
+  {
+    preHandler: app.authenticate,
+    config: minerLimit,
+    schema: { params: { type: 'object', properties: { id: { type: 'integer', minimum: 1 } } } },
+  },
+  async (req, reply) => {
+    const { data, error } = await supabase.rpc('location_upgrade', { p_user: req.user.uid, p_type: req.params.id });
+    if (error || !data?.length) return locationFail(req, reply, error, 'location_upgrade failed');
+    return { balance: Number(data[0].new_balance), level: data[0].new_level, paid: Number(data[0].paid) };
+  },
+);
+
+app.post('/locations/collect', { preHandler: app.authenticate, config: minerLimit }, async (req, reply) => {
+  const { data, error } = await supabase.rpc('locations_collect', { p_user: req.user.uid });
+  if (error || !data?.length) return locationFail(req, reply, error, 'locations_collect failed');
+  return { collected: Number(data[0].collected), balance: Number(data[0].new_balance) };
+});
+
 // ---------- Колесо фортуны ----------
 const WHEEL_ERRORS = ['free_spin_used', 'paid_limit', 'no_bonus_spins', 'insufficient_funds', 'user_not_found', 'bad_mode'];
 const wheelLimit = { rateLimit: { max: 30, timeWindow: '1 minute' } };

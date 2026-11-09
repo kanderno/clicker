@@ -101,14 +101,6 @@ export const getUnseenTransfers = () => request('/transfers/unseen');
 export const markTransfersSeen = (upToId) =>
   request('/transfers/seen', { method: 'POST', body: JSON.stringify({ upToId }) });
 
-// ---------- Майнеры ----------
-export const getMiners = () => request('/miners');
-export const buildMiner = (typeId) => request('/miners/build', { method: 'POST', body: JSON.stringify({ typeId }) });
-export const upgradeMiner = (id) => request(`/miners/${id}/upgrade`, { method: 'POST' });
-export const collectMiners = () => request('/miners/collect', { method: 'POST' });
-export const buyPart = (partId, qty = 1) =>
-  request('/parts/buy', { method: 'POST', body: JSON.stringify({ partId, qty }) });
-
 // ---------- Уведомления (результаты ставок и др.) ----------
 export const getUnseenNotices = () => request('/notices/unseen');
 export const markNoticesSeen = (upToId) =>
@@ -122,3 +114,11 @@ export const getLeaderboard = () => request('/leaderboard');
 export const stealFrom = (victimId) => request('/steal', { method: 'POST', body: JSON.stringify({ victimId }) });
 export const buySteal = () => request('/steals/buy', { method: 'POST' });
 export const giftSteal = (toId) => request('/steals/gift', { method: 'POST', body: JSON.stringify({ toId }) });
+
+// ---------- Локации ----------
+export const getLocations = () => request('/locations');
+export const upgradeLocation = (id) => request(`/locations/${id}/upgrade`, { method: 'POST' });
+export const collectLocations = () => request('/locations/collect', { method: 'POST' });
+
+// Картинки, загруженные админом, лежат на нашем сервере (/img/…): в разработке нужен префикс прокси.
+export const assetUrl = (url) => (url && url.startsWith('/img/') ? `${BASE}${url}` : url);

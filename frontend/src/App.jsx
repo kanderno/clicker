@@ -8,7 +8,7 @@ import Bank from './Bank.jsx';
 import Transfer, { userLabel } from './Transfer.jsx';
 import Predictions from './Predictions.jsx';
 import Wheel from './Wheel.jsx';
-import Miners from './Miners.jsx';
+import Locations from './Locations.jsx';
 import Admin from './Admin.jsx';
 
 const BASE_TABS = [
@@ -16,7 +16,7 @@ const BASE_TABS = [
   { id: 'gift', label: 'Подарить', icon: 'gift' },
   { id: 'bets', label: 'Прогнозы', icon: 'bets' },
   { id: 'wheel', label: 'Колесо', icon: 'wheel' },
-  { id: 'miners', label: 'Майнеры', icon: 'miners' },
+  { id: 'locations', label: 'Локации', icon: 'locations' },
   { id: 'bank', label: 'Банк', icon: 'bank' },
 ];
 
@@ -35,11 +35,10 @@ const ICONS = {
       <path d="M12 3v6M12 15v6M3 12h6M15 12h6" />
     </>
   ),
-  miners: (
+  locations: (
     <>
-      <path d="M5 15c-1.5 1.5-2 5-2 5s3.5-.5 5-2c.9-.9.9-2.3 0-3.2-.9-.9-2.3-.8-3 .2Z" />
-      <path d="M9 14.5 6.5 12c.8-4.2 3.5-8 9.5-9 1 6-.8 9.7-5 11.5Z" />
-      <circle cx="14.5" cy="8.5" r="1.6" />
+      <path d="M3 21h18M4 21V10l4-3 4 3v11M12 21V7l4-3 4 3v14" />
+      <path d="M7 14h2M7 17h2M15 11h2M15 14h2M15 17h2" />
     </>
   ),
   gift: (
@@ -191,8 +190,8 @@ function Main({ user }) {
         <div className={tab === 'wheel' ? 'h-full' : 'hidden'}>
           <Wheel active={tab === 'wheel'} balance={balance} onBalance={setBalance} />
         </div>
-        <div className={tab === 'miners' ? 'h-full' : 'hidden'}>
-          <Miners active={tab === 'miners'} onBalance={setBalance} />
+        <div className={tab === 'locations' ? 'h-full' : 'hidden'}>
+          <Locations active={tab === 'locations'} onBalance={setBalance} />
         </div>
         <div className={tab === 'bank' ? 'h-full' : 'hidden'}>
           <Bank active={tab === 'bank'} onBalance={setBalance} />
