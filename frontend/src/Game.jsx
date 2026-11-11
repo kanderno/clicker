@@ -269,6 +269,7 @@ const Game = forwardRef(function Game({ user, active, balance, onBalance, onGift
         steals={state?.steals}
         balance={shown}
         busy={busy}
+        isAdmin={user.isAdmin}
         onGift={onGift}
         onSteal={askSteal}
         onBuySteal={doBuySteal}

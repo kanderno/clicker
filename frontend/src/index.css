@@ -976,3 +976,4 @@ input, textarea {
   -webkit-backdrop-filter: blur(4px);
 }
 .sheet-backdrop .sheet { max-height: calc(100dvh - 40px); overflow-y: auto; }
+.lb-who.is-static { cursor: default; color: inherit; }

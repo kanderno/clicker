@@ -230,8 +230,13 @@ app.get('/leaderboard', { preHandler: app.authenticate, config: gameLimit }, asy
     req.log.error(failed.error, 'leaderboard failed');
     return reply.code(500).send({ error: 'db_error' });
   }
+  // @ники чужих игроков (а значит и ссылки на их профили) видит только админ.
+  const isAdmin = config.adminIds.includes(req.user.tg);
+  const rows = isAdmin
+    ? rowsRes.data
+    : rowsRes.data.map((r) => (r.user_id === req.user.uid ? r : { ...r, username: null }));
   return buildLeaderboard({
-    rows: rowsRes.data,
+    rows,
     leagues: leaguesRes.data,
     myId: req.user.uid,
     peak: meRes.data.peak_balance,

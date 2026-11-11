@@ -25,12 +25,14 @@ export const MaskIcon = () => (
   </svg>
 );
 
-function PlayerRow({ p, canSteal, onGift, onSteal, onNoNick }) {
+function PlayerRow({ p, canSteal, canOpenProfile, onGift, onSteal, onNoNick }) {
   return (
     <li className={`lb-row ${p.isMe ? 'is-me' : ''}`}>
       <span className={`lb-place ${p.place <= 3 ? `is-top is-top-${p.place}` : ''}`}>{p.place}</span>
-      <button type="button" className="lb-who" onClick={() => openProfile(p.username) || onNoNick(p)}
-        aria-label={`Открыть профиль ${displayName(p)}`}>
+      {/* Профиль в Telegram открывает только админ: игрокам чужие профили не показываем */}
+      <button type="button" className={`lb-who ${canOpenProfile ? '' : 'is-static'}`} disabled={!canOpenProfile}
+        onClick={() => openProfile(p.username) || onNoNick(p)}
+        aria-label={canOpenProfile ? `Открыть профиль ${displayName(p)}` : displayName(p)}>
         <Avatar user={p} className="lb-avatar" />
         <span className="lb-name">
           <b>{displayName(p)}{p.isMe ? ' (ты)' : ''}</b>
@@ -52,7 +54,9 @@ function PlayerRow({ p, canSteal, onGift, onSteal, onNoNick }) {
   );
 }
 
-export default function Leaderboard({ active, reloadKey, steals, balance, busy, onGift, onSteal, onBuySteal, onNoNick }) {
+export default function Leaderboard({
+  active, reloadKey, steals, balance, busy, isAdmin, onGift, onSteal, onBuySteal, onNoNick,
+}) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(false);
 
@@ -74,7 +78,7 @@ export default function Leaderboard({ active, reloadKey, steals, balance, busy, 
 
   const charges = steals?.charges ?? 0;
   const canSteal = charges > 0;
-  const rowProps = { canSteal, onGift, onSteal, onNoNick };
+  const rowProps = { canSteal, canOpenProfile: Boolean(isAdmin), onGift, onSteal, onNoNick };
 
   return (
     <section className="lb" aria-label="Лидерборды">
