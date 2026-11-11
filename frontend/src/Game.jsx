@@ -6,6 +6,7 @@ import Coin from './Coin.jsx';
 import Avatar, { displayName } from './Avatar.jsx';
 import Leaderboard, { MaskIcon } from './Leaderboard.jsx';
 import Streak, { rewardParts } from './Streak.jsx';
+import Sheet from './Sheet.jsx';
 
 const FLUSH_MS = 7000;      // раз в 7 секунд отправляем накопленные тапы
 const MAX_CPS = 12;         // на клиенте чуть ниже серверного лимита (15), чтобы не терять тапы
@@ -284,9 +285,7 @@ const Game = forwardRef(function Game({ user, active, balance, onBalance, onGift
       {toast && <div className={`game-toast ${toast.ok ? 'is-ok' : 'is-error'}`} role="status">{toast.text}</div>}
 
       {stealTarget && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-4 pb-6 backdrop-blur-sm"
-          onClick={() => setStealTarget(null)}>
-          <div className="sheet w-full max-w-sm rounded-2xl p-5 text-center" onClick={(e) => e.stopPropagation()}>
+        <Sheet onClose={() => setStealTarget(null)} className="text-center">
             <span className="sheet-icon"><MaskIcon /></span>
             <p className="mt-2 text-lg font-bold">Украсть у {displayName(stealTarget)}?</p>
             <p className="mt-1 text-sm text-slate-400">
@@ -301,8 +300,7 @@ const Game = forwardRef(function Game({ user, active, balance, onBalance, onGift
                 Украсть
               </button>
             </div>
-          </div>
-        </div>
+        </Sheet>
       )}
     </div>
   );

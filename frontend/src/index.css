@@ -961,3 +961,18 @@ input, textarea {
     linear-gradient(#2b2622, #2b2622) 50% 0 / 26px 30px no-repeat,
     radial-gradient(ellipse at 50% 100%, #2b2622 0 62%, transparent 63%) 50% 100% / 150px 30px no-repeat;
 }
+
+/* Нижнее окно поверх всего приложения (включая меню), с отступом под «домашнюю полоску» iPhone */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 16px 16px calc(24px + env(safe-area-inset-bottom));
+  background: rgba(0, 0, 0, .45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.sheet-backdrop .sheet { max-height: calc(100dvh - 40px); overflow-y: auto; }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { assetUrl, collectLocations, getLocations, upgradeLocation } from './api.js';
 import Coin from './Coin.jsx';
 import Building from './Building.jsx';
+import Sheet from './Sheet.jsx';
 
 const fmt = (n) => Number(n).toLocaleString('ru-RU');
 // Короткая запись как в макете: 156.92K, 10M
@@ -131,9 +132,7 @@ export default function Locations({ active, onBalance }) {
       </div>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-4 pb-6 backdrop-blur-sm"
-          onClick={() => setOpenId(null)}>
-          <div className="sheet w-full max-w-sm rounded-2xl p-5" onClick={(e) => e.stopPropagation()}>
+        <Sheet onClose={() => setOpenId(null)}>
             <div className="flex items-center gap-3">
               <Pic loc={open} className="h-16 w-20 shrink-0" />
               <div className="min-w-0">
@@ -164,8 +163,7 @@ export default function Locations({ active, onBalance }) {
             )}
             {msg && <p className={`mt-2 text-center text-sm ${msg.ok ? 'text-emerald-300' : 'text-red-400'}`}>{msg.text}</p>}
             <button type="button" onClick={() => setOpenId(null)} className="mt-3 w-full text-sm text-slate-400">Закрыть</button>
-          </div>
-        </div>
+        </Sheet>
       )}
     </div>
   );
