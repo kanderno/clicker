@@ -155,6 +155,8 @@ app.get('/game/state', { preHandler: app.authenticate, config: gameLimit }, asyn
     },
     steals: { charges: r.steal_charges, price: Number(r.steal_price), max: r.steal_max },
     bonusSpins: r.bonus_spins,
+    boost: { until: r.boost_until, mult: r.boost_mult },
+    vip: { until: r.vip_until, wheelDiscount: r.vip_discount },
   };
 });
 
@@ -173,7 +175,15 @@ app.post('/streak/claim', { preHandler: app.authenticate, config: gameLimit }, a
   const { data, error } = await supabase.rpc('streak_claim', { p_user: req.user.uid });
   if (error || !data?.length) return gameFail(req, reply, error, 'streak_claim failed');
   const r = data[0];
-  return { day: r.day_count, coins: Number(r.coins), spins: r.spins, steals: r.steals, balance: Number(r.new_balance) };
+  return {
+    day: r.day_count,
+    coins: Number(r.coins),
+    spins: r.spins,
+    steals: r.steals,
+    boost: r.boost_minutes,
+    vip: r.vip_hours,
+    balance: Number(r.new_balance),
+  };
 });
 
 // Кража у выбранного игрока: тратится заряд, процент (2–10%) случайный и заранее игроку не показывается.
@@ -497,6 +507,8 @@ app.get('/wheel', { preHandler: app.authenticate, config: wheelLimit }, async (r
     secondsToReset: st.seconds_to_reset,
     bonusSpins: st.bonus_spins,
     stealCharges: st.steal_charges,
+    basePrice: st.base_price,
+    vipUntil: st.vip_until,
     prizes: prizesRes.data,
   };
 });
@@ -1463,10 +1475,15 @@ app.get(
 
 // Оформление для всех игроков: свой логотип и монета (если админ загрузил).
 app.get('/config', { preHandler: app.authenticate }, async (req, reply) => {
-  const { data, error } = await supabase.from('settings').select('key, value').in('key', ['logo_url', 'coin_url']);
+  const { data, error } = await supabase.from('settings').select('key, value')
+    .in('key', ['logo_url', 'coin_url', 'nav_icons']);
   if (error) return dbFail(req, reply, error, 'config failed');
   const byKey = new Map(data.map((r) => [r.key, r.value]));
-  return { logoUrl: byKey.get('logo_url') ?? null, coinUrl: byKey.get('coin_url') ?? null };
+  return {
+    logoUrl: byKey.get('logo_url') ?? null,
+    coinUrl: byKey.get('coin_url') ?? null,
+    navIcons: byKey.get('nav_icons') ?? {},
+  };
 });
 
 // ---------- Mini App: раздача собранного фронтенда ----------

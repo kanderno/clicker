@@ -44,3 +44,14 @@ test('isImageUrl: только наши /img/N или https', () => {
   assert.ok(!isImageUrl('http://x.com/a.png'));
   assert.ok(!isImageUrl('/img/../x'));
 });
+
+test('validateSettings: буст и VIP в стрике, иконки меню', () => {
+  const cur = settingsView([]);
+  assert.deepEqual(validateSettings({ streak_rewards: [{ boost: 30, vip: 24 }] }, cur).rows[0].value, [{ boost: 30, vip: 24 }]);
+  assert.equal(validateSettings({ streak_rewards: [{ boost: 5000 }] }, cur).error, 'bad_setting');
+  assert.deepEqual(validateSettings({ nav_icons: { game: '/img/3', bank: null } }, cur).rows[0].value, { game: '/img/3' });
+  assert.equal(validateSettings({ nav_icons: { hack: '/img/3' } }, cur).error, 'bad_setting');
+  assert.equal(validateSettings({ nav_icons: { game: 'javascript:1' } }, cur).error, 'bad_setting');
+  assert.equal(cur.tap_boost_mult, 2);
+  assert.deepEqual(cur.nav_icons, {});
+});

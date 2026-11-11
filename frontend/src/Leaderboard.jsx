@@ -35,7 +35,7 @@ function PlayerRow({ p, canSteal, canOpenProfile, onGift, onSteal, onNoNick }) {
         aria-label={canOpenProfile ? `Открыть профиль ${displayName(p)}` : displayName(p)}>
         <Avatar user={p} className="lb-avatar" />
         <span className="lb-name">
-          <b>{displayName(p)}{p.isMe ? ' (ты)' : ''}</b>
+          <b>{p.vip && <span className="lb-vip" title="VIP">👑 </span>}{displayName(p)}{p.isMe ? ' (ты)' : ''}</b>
           <small><Coin className="lb-coin" />{short(p.balance)}</small>
         </span>
       </button>
@@ -78,6 +78,12 @@ export default function Leaderboard({
 
   const charges = steals?.charges ?? 0;
   const canSteal = charges > 0;
+  // Справа от топа игроков: сколько краж доступно (как просил заказчик)
+  const stealChip = (
+    <span className={`lb-steal-chip ${canSteal ? 'is-armed' : ''}`} title="Доступно краж">
+      <MaskIcon /> {charges}
+    </span>
+  );
   const rowProps = { canSteal, canOpenProfile: Boolean(isAdmin), onGift, onSteal, onNoNick };
 
   return (
@@ -111,11 +117,14 @@ export default function Leaderboard({
                     : 'Высшая лига'}
                 </small>
               </span>
-              {data.league && (
-                <span className="lb-prize" title="Награды за неделю: 1, 2 и 3 место">
-                  🏆 {data.league.rewards.map(short).join(' / ')}
-                </span>
-              )}
+              <span className="lb-head-side">
+                {stealChip}
+                {data.league && (
+                  <span className="lb-prize" title="Награды за неделю: 1, 2 и 3 место">
+                    🏆 {data.league.rewards.map(short).join(' / ')}
+                  </span>
+                )}
+              </span>
             </div>
             <ol className="lb-list">
               {data.local.map((p) => <PlayerRow key={`l${p.id}`} p={p} {...rowProps} />)}
@@ -128,6 +137,7 @@ export default function Leaderboard({
                 <b>Глобальный топ</b>
                 <small>Все игроки по балансу</small>
               </span>
+              <span className="lb-head-side">{stealChip}</span>
             </div>
             <ol className="lb-list">
               {data.global.map((p) => <PlayerRow key={`g${p.id}`} p={p} {...rowProps} />)}

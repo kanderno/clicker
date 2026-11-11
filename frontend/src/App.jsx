@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  getConfig, getUnseenNotices, getUnseenSteals, getUnseenTransfers, login, markNoticesSeen, markStealsSeen, markTransfersSeen,
+  assetUrl, getConfig, getUnseenNotices, getUnseenSteals, getUnseenTransfers, login, markNoticesSeen, markStealsSeen, markTransfersSeen,
 } from './api.js';
 import NoticesModal from './Notices.jsx';
 import { AssetsContext } from './assets.js';
@@ -57,7 +57,9 @@ const ICONS = {
   ),
 };
 
-function TabIcon({ id }) {
+function TabIcon({ id, url }) {
+  // Иконку вкладки может заменить админ (своя картинка)
+  if (url) return <img src={assetUrl(url)} alt="" className="nav-img" draggable="false" />;
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       {ICONS[id]}
@@ -90,7 +92,7 @@ function useTheme() {
 function Main({ user }) {
   const [tab, setTab] = useState('game');
   const [theme, toggleTheme] = useTheme();
-  const [assets, setAssets] = useState({ logoUrl: null, coinUrl: null });
+  const [assets, setAssets] = useState({ logoUrl: null, coinUrl: null, navIcons: {} });
   const [balance, setBalance] = useState(user.balance); // баланс всегда приходит с сервера
   const gameRef = useRef(null);
   const [theft, setTheft] = useState(null); // { count, total, upToId }: показываем жертве, что у неё украли
@@ -294,7 +296,7 @@ function Main({ user }) {
             aria-current={tab === t.id ? 'page' : undefined}
             className={`app-nav-item ${tab === t.id ? 'is-active' : ''}`}
           >
-            <span className="nav-icon"><TabIcon id={t.icon} /></span>
+            <span className="nav-icon"><TabIcon id={t.icon} url={assets.navIcons?.[t.id]} /></span>
             <span>{t.label}</span>
           </button>
         ))}

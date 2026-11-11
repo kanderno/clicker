@@ -14,6 +14,14 @@ const MIN_GAP = 1000 / MAX_CPS;
 const MAX_FLOATERS = 12;
 
 const fmt = (n) => Number(n).toLocaleString('ru-RU');
+// Время окончания буста/VIP: сегодня — только часы, иначе с датой.
+const fmtTime = (iso) => {
+  const d = new Date(iso);
+  const sameDay = d.toDateString() === new Date().toDateString();
+  return d.toLocaleString('ru-RU', sameDay
+    ? { hour: '2-digit', minute: '2-digit' }
+    : { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+};
 
 const ERRORS = {
   insufficient_funds: 'Не хватает монет',
@@ -113,6 +121,14 @@ const Game = forwardRef(function Game({ user, active, balance, onBalance, onGift
   useEffect(() => {
     if (active) loadState();
   }, [active, loadState]);
+
+  // Когда буст или VIP заканчивается, перечитываем состояние: сила тапа вернётся к обычной.
+  useEffect(() => {
+    const ends = [state?.boost.until, state?.vip.until].filter(Boolean).map((t) => new Date(t).getTime() - Date.now());
+    if (!ends.length) return undefined;
+    const t = setTimeout(loadState, Math.max(1000, Math.min(...ends) + 500));
+    return () => clearTimeout(t);
+  }, [state, loadState]);
 
   const onTap = (e) => {
     const now = performance.now();
@@ -224,6 +240,16 @@ const Game = forwardRef(function Game({ user, active, balance, onBalance, onGift
           <span><small>Кражи</small><b className={state?.steals.charges ? 'is-red' : ''}>{state?.steals.charges ?? 0}</b></span>
           <span><small>Бонус-спины</small><b>{state?.bonusSpins ?? 0}</b></span>
         </div>
+        {(state?.boost.until || state?.vip.until) && (
+          <div className="perks">
+            {state.boost.until && (
+              <span className="perk perk-boost">⚡ Буст x{state.boost.mult} до {fmtTime(state.boost.until)}</span>
+            )}
+            {state.vip.until && (
+              <span className="perk perk-vip">👑 VIP до {fmtTime(state.vip.until)} · колесо −{state.vip.wheelDiscount}%</span>
+            )}
+          </div>
+        )}
       </section>
 
       <div ref={areaRef} className="coin-stage">
@@ -252,7 +278,7 @@ const Game = forwardRef(function Game({ user, active, balance, onBalance, onGift
             <small>
               {tap.upgradeCost === null
                 ? `Уровень ${tap.level} — максимум`
-                : `Ур. ${tap.level} → ${tap.level + 1}: +${fmt(tap.power)} → +${fmt(tap.power + 1)} за тап`}
+                : `Ур. ${tap.level} → ${tap.level + 1}: +${fmt(tap.level)} → +${fmt(tap.level + 1)} за тап`}
             </small>
           </span>
           {tap.upgradeCost !== null && (

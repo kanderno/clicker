@@ -6,6 +6,7 @@ const toPlayer = (r, myId) => ({
   firstName: r.first_name,
   photoUrl: r.photo_url,
   balance: Number(r.balance),
+  vip: Boolean(r.vip),
   isMe: r.user_id === myId,
 });
 

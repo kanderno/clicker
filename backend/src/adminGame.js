@@ -8,6 +8,11 @@ export const SETTINGS = {
   steal_pct_min: { def: 2, min: 0.1, max: 100 },
   steal_pct_max: { def: 10, min: 0.1, max: 100 },
   steal_cap: { def: 0, min: 0, max: 1e12, int: true },
+  steal_min_balance: { def: 100, min: 0, max: 1e12, int: true },
+  steal_newbie_hours: { def: 24, min: 0, max: 720, int: true },
+  steal_victim_cap: { def: 3, min: 0, max: 1000, int: true },
+  tap_boost_mult: { def: 2, min: 1, max: 10, int: true },
+  vip_wheel_discount: { def: 50, min: 0, max: 100, int: true },
   tap_upgrade_base: { def: 200, min: 1, max: 1e12, int: true },
   tap_upgrade_growth: { def: 1.35, min: 1, max: 10 },
   tap_max_level: { def: 30, min: 1, max: 1000, int: true },
@@ -17,9 +22,15 @@ export const SETTINGS = {
 };
 
 export const DEFAULT_STREAK = [
-  { coins: 100 }, { coins: 250 }, { spins: 1 }, { coins: 500 }, { coins: 1000 },
-  { coins: 1500, spins: 1 }, { coins: 3000, steals: 1 },
+  { coins: 100 }, { coins: 250 }, { spins: 1 }, { coins: 500 }, { coins: 1000, boost: 30 },
+  { coins: 1500, spins: 1 }, { coins: 3000, steals: 1, vip: 24 },
 ];
+
+// Награда дня стрика: монеты, бонусные спины, заряды кражи, буст удара (минут), VIP (часов).
+const STREAK_LIMITS = { coins: 1e12, spins: 100, steals: 100, boost: 1440, vip: 720 };
+
+// Вкладки нижнего меню, у которых админ может заменить иконку.
+export const NAV_TABS = ['game', 'gift', 'bets', 'wheel', 'locations', 'bank', 'admin'];
 
 const IMAGE_URL = /^(\/img\/\d{1,12}|https:\/\/[^\s"'<>]{1,490})$/;
 export const isImageUrl = (v) => v === null || (typeof v === 'string' && IMAGE_URL.test(v));
@@ -32,6 +43,7 @@ export function settingsView(rows) {
   out.streak_rewards = byKey.get('streak_rewards') ?? DEFAULT_STREAK;
   out.logo_url = byKey.get('logo_url') ?? null;
   out.coin_url = byKey.get('coin_url') ?? null;
+  out.nav_icons = byKey.get('nav_icons') ?? {};
   return out;
 }
 
@@ -41,9 +53,8 @@ function cleanStreak(list) {
   for (const r of list) {
     if (!r || typeof r !== 'object') return null;
     const day = {};
-    for (const k of ['coins', 'spins', 'steals']) {
+    for (const [k, max] of Object.entries(STREAK_LIMITS)) {
       const v = r[k] ?? 0;
-      const max = k === 'coins' ? 1e12 : 100;
       if (!Number.isInteger(v) || v < 0 || v > max) return null;
       if (v > 0) day[k] = v;
     }
@@ -68,6 +79,11 @@ export function validateSettings(body, current) {
       const list = cleanStreak(value);
       if (!list) return { error: 'bad_setting', key };
       rows.push({ key, value: list });
+    } else if (key === 'nav_icons') {
+      const ok = value && typeof value === 'object' && !Array.isArray(value)
+        && Object.entries(value).every(([tab, url]) => NAV_TABS.includes(tab) && isImageUrl(url));
+      if (!ok) return { error: 'bad_setting', key };
+      rows.push({ key, value: Object.fromEntries(Object.entries(value).filter(([, url]) => url)) });
     } else if (key === 'logo_url' || key === 'coin_url') {
       if (!isImageUrl(value)) return { error: 'bad_setting', key };
       rows.push({ key, value });

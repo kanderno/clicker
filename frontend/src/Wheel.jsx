@@ -177,6 +177,9 @@ export default function Wheel({ active, balance, onBalance }) {
               <button type="button" disabled={busy || noMoney} onClick={() => spin('paid')}
                 className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-700 py-3.5 text-lg font-bold active:bg-slate-600 disabled:opacity-50">
                 Крутить за <Coin className="h-5 w-5" /> {fmt(data.price)}
+                {data.vipUntil && data.basePrice > data.price && (
+                  <s className="text-sm font-semibold text-slate-400">{fmt(data.basePrice)}</s>
+                )}
               </button>
             ) : (
               <p className="rounded-2xl bg-slate-800/70 py-3 text-sm text-slate-400">

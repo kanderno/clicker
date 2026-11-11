@@ -32,6 +32,13 @@ const SETTING_GROUPS = [
     ['steal_pct_min', 'Крадётся от, % кошелька'],
     ['steal_pct_max', 'Крадётся до, % кошелька'],
     ['steal_cap', 'Потолок одной кражи (0 — без потолка)'],
+    ['steal_min_balance', 'У жертвы в кошельке больше, чем'],
+    ['steal_newbie_hours', 'Защита новичков, часов (0 — нет)'],
+    ['steal_victim_cap', 'Краж у одного игрока в сутки (0 — без лимита)'],
+  ]],
+  ['Бусты и привилегии', [
+    ['tap_boost_mult', 'Буст удара: множитель (×)'],
+    ['vip_wheel_discount', 'VIP: скидка на платный спин, %'],
   ]],
   ['Прокачка удара', [
     ['tap_upgrade_base', 'Цена первого улучшения'],
@@ -103,6 +110,12 @@ function Section({ title, children }) {
     </details>
   );
 }
+
+const STREAK_KEYS = ['coins', 'spins', 'steals', 'boost', 'vip'];
+const NAV_LABELS = [
+  ['game', 'Играть'], ['gift', 'Подарить'], ['bets', 'Прогнозы'], ['wheel', 'Колесо'],
+  ['locations', 'Локации'], ['bank', 'Банк'], ['admin', 'Админ'],
+];
 
 const KIND_LABELS = { coins: 'Монеты', free_bet: 'Фрибет', steal: 'Кража' };
 
@@ -254,13 +267,15 @@ export default function AdminGame({ active }) {
   const [busy, setBusy] = useState(false);
   const [version, setVersion] = useState(0); // меняется после загрузки: строки берут свежие данные
   const [adding, setAdding] = useState({ prize: false, location: false, league: false });
+  const [navIcons, setNavIcons] = useState({});
 
   const load = useCallback(async () => {
     try {
       const g = await adminGetGame();
       setGame(g);
       setDraft(Object.fromEntries(SETTING_GROUPS.flatMap(([, items]) => items).map(([k]) => [k, String(g.settings[k])])));
-      setStreak(g.settings.streak_rewards.map((r) => ({ coins: r.coins ?? 0, spins: r.spins ?? 0, steals: r.steals ?? 0 })));
+      setStreak(g.settings.streak_rewards.map((r) => Object.fromEntries(STREAK_KEYS.map((k) => [k, r[k] ?? 0]))));
+      setNavIcons(g.settings.nav_icons ?? {});
       setVersion((v) => v + 1);
       setAdding({ prize: false, location: false, league: false });
     } catch (e) {
@@ -314,6 +329,19 @@ export default function AdminGame({ active }) {
         </div>
       </Section>
 
+      <Section title="Иконки нижнего меню">
+        <div className="admin-card space-y-2">
+          {NAV_LABELS.map(([id, label]) => (
+            <div key={id} className="flex items-center justify-between gap-2">
+              <span className="text-sm">{label}</span>
+              <ImagePicker value={navIcons[id] ?? null} onError={(t) => onMsg(false, t)}
+                onChange={(url) => save({ nav_icons: { ...navIcons, [id]: url } }, url ? `Иконка «${label}» обновлена` : `Иконка «${label}» сброшена`)} />
+            </div>
+          ))}
+          <p className="text-xs text-slate-500">Квадратная картинка с прозрачным фоном смотрится лучше всего. «Убрать» вернёт стандартную иконку.</p>
+        </div>
+      </Section>
+
       <Section title="Колесо: призы и шансы">
         {game.prizes.map((p) => (
           <PrizeRow key={`${p.id}-${version}`} prize={p} totalWeight={totalWeight} onSaved={load} onMsg={onMsg} />
@@ -355,13 +383,13 @@ export default function AdminGame({ active }) {
 
       <Section title="Награды стрика">
         <div className="admin-card space-y-2">
-          <div className="grid grid-cols-[32px_1fr_1fr_1fr] gap-2 text-xs text-slate-400">
-            <span>День</span><span>Монеты</span><span>Спины</span><span>Кражи</span>
+          <div className="admin-streak-grid text-xs text-slate-400">
+            <span>День</span><span>Монеты</span><span>Спины</span><span>Кражи</span><span>Буст, мин</span><span>VIP, ч</span>
           </div>
           {streak.map((r, i) => (
-            <div key={i} className="grid grid-cols-[32px_1fr_1fr_1fr] items-center gap-2">
+            <div key={i} className="admin-streak-grid items-center">
               <span className="text-sm font-bold">{i + 1}</span>
-              {['coins', 'spins', 'steals'].map((k) => (
+              {STREAK_KEYS.map((k) => (
                 <input key={k} className={inputCls} inputMode="numeric" value={r[k]}
                   onChange={(e) => setDay(i, k, e.target.value.replace(/\D/g, ''))} />
               ))}
@@ -369,7 +397,8 @@ export default function AdminGame({ active }) {
           ))}
           <div className="flex gap-3 text-sm">
             {streak.length < 14 && (
-              <button type="button" className="text-yellow-400" onClick={() => setStreak((l) => [...l, { coins: 0, spins: 0, steals: 0 }])}>
+              <button type="button" className="text-yellow-400"
+                onClick={() => setStreak((l) => [...l, Object.fromEntries(STREAK_KEYS.map((k) => [k, 0]))])}>
                 + день
               </button>
             )}
@@ -378,11 +407,15 @@ export default function AdminGame({ active }) {
             )}
           </div>
           <button type="button" disabled={busy} className="admin-save w-full"
-            onClick={() => save({ streak_rewards: streak.map((r) => ({ coins: num(r.coins) || 0, spins: num(r.spins) || 0, steals: num(r.steals) || 0 })) },
+            onClick={() => save({ streak_rewards: streak.map((r) => Object.fromEntries(STREAK_KEYS.map((k) => [k, num(r[k]) || 0]))) },
               'Награды стрика сохранены')}>
             Сохранить награды
           </button>
-          <p className="text-xs text-slate-500">После последнего дня цикл начинается заново. Пропустил день — стрик с первого дня.</p>
+          <p className="text-xs text-slate-500">
+            Буст — монет за тап больше в {game.settings.tap_boost_mult} раза на указанные минуты. VIP — скидка
+            {' '}{game.settings.vip_wheel_discount}% на платный спин и корона в лидерборде на указанные часы. Повторная награда продлевает срок.
+            После последнего дня цикл начинается заново. Пропустил день — стрик с первого дня.
+          </p>
         </div>
       </Section>
 

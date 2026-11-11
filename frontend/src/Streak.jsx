@@ -8,6 +8,8 @@ export function rewardParts(r = {}) {
   if (r.coins > 0) parts.push(`+${fmt(r.coins)}`);
   if (r.spins > 0) parts.push(r.spins > 1 ? `${r.spins} спина` : 'спин');
   if (r.steals > 0) parts.push(r.steals > 1 ? `${r.steals} кражи` : 'кража');
+  if (r.boost > 0) parts.push(`буст ${r.boost >= 60 && r.boost % 60 === 0 ? `${r.boost / 60}ч` : `${r.boost}м`}`);
+  if (r.vip > 0) parts.push(`VIP ${r.vip}ч`);
   return parts;
 }
 

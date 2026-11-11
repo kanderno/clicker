@@ -977,3 +977,28 @@ input, textarea {
 }
 .sheet-backdrop .sheet { max-height: calc(100dvh - 40px); overflow-y: auto; }
 .lb-who.is-static { cursor: default; color: inherit; }
+
+/* ---------- буст, VIP, счётчик краж у лидерборда, свои иконки меню ---------- */
+.perks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.perk { padding: 4px 8px; border-radius: 8px; font-size: 11px; font-weight: 800; }
+.perk-boost { background: rgba(80, 170, 255, .16); color: #7cc0ff; }
+.perk-vip { background: rgba(255, 198, 46, .16); color: var(--gold-ink); }
+:root[data-theme="light"] .perk-boost { color: #1f6fb8; }
+.lb-head-side { display: flex; flex: none; align-items: center; gap: 6px; }
+.lb-steal-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 7px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: #8796a8;
+  font-size: 11px;
+  font-weight: 800;
+}
+.lb-steal-chip svg { width: 15px; height: 15px; }
+.lb-steal-chip.is-armed { border-color: #e23b3b; background: rgba(226, 59, 59, .15); color: #ff6b6b; }
+.lb-vip { font-size: 11px; }
+.nav-img { width: 26px; height: 26px; object-fit: contain; }
+.admin-streak-grid { display: grid; grid-template-columns: 26px repeat(5, minmax(0, 1fr)); gap: 4px; }
+.admin-streak-grid input { padding-left: 6px; padding-right: 6px; }
