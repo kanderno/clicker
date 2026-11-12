@@ -1261,10 +1261,20 @@ app.put('/admin/settings', { preHandler: adminOnly, config: adminLimit }, async 
   const check = validateSettings(req.body, settings);
   if (check.error) return reply.code(400).send({ error: check.error, key: check.key });
   if (check.rows.length) {
+    // null = «вернуть по умолчанию» (например, убрать свою монету): такую строку удаляем,
+    // в колонку value (not null) пустое значение записать нельзя.
+    const toSave = check.rows.filter((r) => r.value !== null);
+    const toReset = check.rows.filter((r) => r.value === null).map((r) => r.key);
     const now = new Date().toISOString();
-    const { error: upErr } = await supabase.from('settings')
-      .upsert(check.rows.map((r) => ({ ...r, updated_at: now })), { onConflict: 'key' });
-    if (upErr) return dbFail(req, reply, upErr, 'settings save failed');
+    if (toSave.length) {
+      const { error: upErr } = await supabase.from('settings')
+        .upsert(toSave.map((r) => ({ ...r, updated_at: now })), { onConflict: 'key' });
+      if (upErr) return dbFail(req, reply, upErr, 'settings save failed');
+    }
+    if (toReset.length) {
+      const { error: delErr } = await supabase.from('settings').delete().in('key', toReset);
+      if (delErr) return dbFail(req, reply, delErr, 'settings reset failed');
+    }
     req.log.info({ admin: req.user.tg, keys: check.rows.map((r) => r.key) }, 'settings changed');
   }
   return { settings: { ...settings, ...Object.fromEntries(check.rows.map((r) => [r.key, r.value])) } };

@@ -325,7 +325,10 @@ export default function AdminGame({ active }) {
             <ImagePicker value={game.settings.coin_url} onError={(t) => onMsg(false, t)}
               onChange={(url) => save({ coin_url: url }, url ? 'Монета обновлена' : 'Монета сброшена')} />
           </div>
-          <p className="text-xs text-slate-500">PNG/JPG/WebP/GIF. Картинка уменьшится до 512 px. Для локаций и призов — в их разделах.</p>
+          <p className="text-xs text-slate-500">
+            PNG/JPG/WebP/GIF. Картинка уменьшится до 512 px, монета обрежется в круг. «Убрать» возвращает стандартную
+            монету или логотип. Для локаций и призов — в их разделах.
+          </p>
         </div>
       </Section>
 

@@ -32,7 +32,8 @@ const crimpTicks = Array.from({ length: N }, (_, i) => {
 
 export default function Coin({ className = '' }) {
   const { coinUrl } = useContext(AssetsContext);
-  if (coinUrl) return <img src={assetUrl(coinUrl)} alt="" className={`${className} object-contain`} draggable="false" />;
+  // Своя картинка монеты обрезается в круг: кнопка тапа круглая, квадратные углы фона не видны.
+  if (coinUrl) return <img src={assetUrl(coinUrl)} alt="" className={`coin-custom ${className}`} draggable="false" />;
   return (
     <svg viewBox="0 0 200 200" className={className} aria-hidden="true">
       <defs>

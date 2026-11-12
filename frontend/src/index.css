@@ -1002,3 +1002,6 @@ input, textarea {
 .nav-img { width: 26px; height: 26px; object-fit: contain; }
 .admin-streak-grid { display: grid; grid-template-columns: 26px repeat(5, minmax(0, 1fr)); gap: 4px; }
 .admin-streak-grid input { padding-left: 6px; padding-right: 6px; }
+
+/* Своя монета от админа: всегда круг, картинка заполняет его целиком */
+.coin-custom { border-radius: 50%; object-fit: cover; aspect-ratio: 1; }
