@@ -1,6 +1,7 @@
 // Бот для разработки: npm run bot:poll (не нужен публичный адрес бэкенда).
 // В продакшене вместо этого работает вебхук (npm run bot:setup -- <адрес> --webhook).
 import { createTelegramApi, explainNetworkError, handleUpdate, isHttpsUrl } from '../src/bot.js';
+import { supabase } from '../src/db.js';
 
 const token = process.env.BOT_TOKEN;
 const webAppUrl = (process.env.WEBAPP_URL || '').replace(/\/+$/, '');
@@ -24,7 +25,15 @@ for (;;) {
     for (const u of updates) {
       offset = u.update_id + 1;
       try {
-        await handleUpdate(u, { api, webAppUrl });
+        await handleUpdate(u, {
+          api,
+          webAppUrl,
+          // Переход по реферальной ссылке: как в вебхуке, записываем пригласившего
+          onReferral: async (referrerId, referredTg) => {
+            const { error } = await supabase.rpc('referral_invite', { p_referrer: referrerId, p_referred_tg: referredTg });
+            if (error) console.error('referral_invite:', error.message);
+          },
+        });
       } catch (err) {
         console.error('Ошибка ответа:', err.message);
       }

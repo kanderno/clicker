@@ -513,6 +513,29 @@ input, textarea {
   box-shadow: 0 3px 0 var(--shadow-hard);
 }
 .streak { padding: 12px; }
+.invite-icon { background: rgba(255, 198, 46, .16); }
+.invite-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+.invite-stats span { padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); text-align: center; }
+.invite-stats small, .invite-stats b { display: block; }
+.invite-stats small { color: var(--muted); font-size: 11px; }
+.invite-stats b { display: flex; align-items: center; justify-content: center; gap: 4px; margin-top: 2px; font-size: 16px; }
+.invite-coin { width: 16px; height: 16px; }
+.invite-link {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--gold-ink);
+  font-size: 13px;
+  text-align: center;
+  word-break: break-all;
+  user-select: all;
+  cursor: pointer;
+}
+.invite-friends { max-height: 200px; margin: 14px 0 0; padding: 0; overflow-y: auto; list-style: none; }
+.invite-friends li { display: flex; align-items: center; gap: 10px; padding: 7px 2px; border-top: 1px solid var(--line-faint); font-size: 14px; }
+.invite-avatar { width: 28px; height: 28px; font-size: 12px; }
 .streak-head { display: flex; align-items: center; gap: 10px; }
 .streak-flame { display: grid; width: 34px; height: 34px; flex: none; place-items: center; border-radius: 10px; background: rgba(255, 122, 60, .16); font-size: 18px; }
 .streak-title { flex: 1; min-width: 0; }

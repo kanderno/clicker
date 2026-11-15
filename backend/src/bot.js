@@ -45,17 +45,32 @@ export const playKeyboard = (webAppUrl, text = 'Играть') => ({
   inline_keyboard: [[{ text, web_app: { url: webAppUrl } }]],
 });
 
+// ---------- реферальные ссылки ----------
+/** "ref_15" -> 15 (id пригласившего в users), всё остальное -> null. */
+export function parseRefParam(param) {
+  const m = /^ref_(\d{1,15})$/.exec(typeof param === 'string' ? param : '');
+  const id = m ? Number(m[1]) : 0;
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
 // ---------- обработка сообщения ----------
 /**
  * Отвечает на личные сообщения: /start, /help, /play и любой другой текст (всегда с кнопкой «Играть»).
  * Возвращает true, если ответ отправлен. Групповые чаты и не-текстовые события игнорируются.
  */
-export async function handleUpdate(update, { api, webAppUrl }) {
+export async function handleUpdate(update, { api, webAppUrl, onReferral }) {
   const msg = update?.message;
   if (!msg || msg.chat?.type !== 'private' || typeof msg.text !== 'string') return false;
 
   // "/start@my_bot ref_5" -> "/start"
-  const command = msg.text.trim().split(/\s+/)[0].split('@')[0].toLowerCase();
+  const [head, arg] = msg.text.trim().split(/\s+/);
+  const command = head.split('@')[0].toLowerCase();
+
+  // Переход по реферальной ссылке t.me/<бот>?start=ref_<id>. Ошибка записи не мешает приветствию.
+  const referrer = command === '/start' ? parseRefParam(arg) : null;
+  if (referrer && onReferral && msg.from?.id) {
+    await onReferral(referrer, msg.from.id).catch(() => {});
+  }
 
   let text;
   if (command === '/start') text = welcomeText(msg.from?.first_name);

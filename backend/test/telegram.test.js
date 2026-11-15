@@ -46,3 +46,12 @@ test('мусор и пустые значения отклоняются', () =>
   assert.equal(validateInitData(undefined, BOT), null);
   assert.equal(validateInitData('auth_date=1&hash=zz', BOT), null);
 });
+
+test('start_param (реферальная ссылка startapp) отдаётся только под подписью', () => {
+  const init = sign({ auth_date: String(now()), user: userJson, start_param: 'ref_7' });
+  assert.equal(validateInitData(init, BOT).startParam, 'ref_7');
+  const p = new URLSearchParams(init);
+  p.set('start_param', 'ref_1');
+  assert.equal(validateInitData(p.toString(), BOT), null);
+  assert.equal(validateInitData(sign({ auth_date: String(now()), user: userJson }), BOT).startParam, null);
+});

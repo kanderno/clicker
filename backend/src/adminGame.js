@@ -19,6 +19,7 @@ export const SETTINGS = {
   locations_cap_hours: { def: 3, min: 0.5, max: 168 },
   location_price_growth: { def: 1.6, min: 1, max: 10 },
   location_income_growth: { def: 1.4, min: 1, max: 10 },
+  referral_bonus: { def: 5000, min: 0, max: 1e12, int: true },
 };
 
 export const DEFAULT_STREAK = [

@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 
 /**
  * Проверка подписи initData по документации Telegram (HMAC-SHA256).
- * Возвращает { user, authDate } или null, если подпись неверна / данные устарели.
+ * Возвращает { user, authDate, startParam } или null, если подпись неверна / данные устарели.
  */
 export function validateInitData(initData, botToken, maxAgeSec = 24 * 60 * 60) {
   if (typeof initData !== 'string' || !initData) return null;
@@ -37,5 +37,6 @@ export function validateInitData(initData, botToken, maxAgeSec = 24 * 60 * 60) {
   }
   if (!user || typeof user.id !== 'number') return null;
 
-  return { user, authDate };
+  // start_param есть, если игру открыли ссылкой t.me/<бот>?startapp=...; он тоже под подписью
+  return { user, authDate, startParam: params.get('start_param') };
 }

@@ -6,6 +6,7 @@ const KINDS = {
   bet_lost: { sign: '−', cls: 'text-red-300', text: (n) => `Ставка на «${n.body}» не сыграла` },
   bet_refund: { sign: '↩ ', cls: 'text-amber-300', text: () => 'Событие отменено, ставка вернулась' },
   league_reward: { sign: '+', cls: 'text-emerald-300', text: (n) => `Награда лиги: ${n.body}` },
+  referral: { sign: '+', cls: 'text-emerald-300', text: () => 'Друг пришёл в игру по твоей ссылке' },
   steal_gift: { sign: '', cls: 'text-red-300', text: () => 'подарил(а) тебе заряд кражи — используй его в лидерборде', hideAmount: true },
 };
 const FALLBACK = { sign: '', cls: 'text-yellow-300', text: (n) => n.body || '' };

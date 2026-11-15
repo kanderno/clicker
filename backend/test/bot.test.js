@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   BOT_DESCRIPTION, BOT_SHORT_DESCRIPTION, COMMANDS, createTelegramApi, escapeHtml, handleUpdate,
-  isHttpsUrl, secretMatches, welcomeText,
+  isHttpsUrl, parseRefParam, secretMatches, welcomeText,
 } from '../src/bot.js';
 import { setupBot, upsertEnvLine } from '../src/botSetup.js';
 
@@ -169,4 +169,30 @@ test('explainNetworkError: вложенные ошибки (несколько �
   assert.ok(explainNetworkError(new Error('странная ошибка')).includes('странная ошибка'));
   assert.ok(explainNetworkError('просто строка').includes('просто строка'));
   assert.ok(explainNetworkError(undefined).length > 0);
+});
+
+test('parseRefParam: только ref_<число>, остальное отбрасывается', () => {
+  assert.equal(parseRefParam('ref_15'), 15);
+  for (const bad of [undefined, null, '', 'ref_', 'ref_0', 'ref_-3', 'ref_1x', 'abc', 'ref_9999999999999999', 15]) {
+    assert.equal(parseRefParam(bad), null, String(bad));
+  }
+});
+
+test('/start ref_<id>: пригласивший записан, приветствие отправлено как обычно', async () => {
+  const api = fakeApi();
+  const calls = [];
+  const onReferral = async (...a) => calls.push(a);
+  assert.equal(await handleUpdate(msg('/start ref_42'), { api, webAppUrl: URL_, onReferral }), true);
+  assert.deepEqual(calls, [[42, 5]]);
+  assert.ok(api.sent[0].text.includes('Аня'));
+  await handleUpdate(msg('/start'), { api, webAppUrl: URL_, onReferral });
+  await handleUpdate(msg('/help ref_42'), { api, webAppUrl: URL_, onReferral });
+  assert.equal(calls.length, 1);
+});
+
+test('ошибка записи реферала не ломает ответ бота', async () => {
+  const api = fakeApi();
+  const onReferral = async () => { throw new Error('db down'); };
+  assert.equal(await handleUpdate(msg('/start ref_42'), { api, webAppUrl: URL_, onReferral }), true);
+  assert.equal(api.sent.length, 1);
 });

@@ -6,6 +6,7 @@ import Coin from './Coin.jsx';
 import Avatar, { displayName } from './Avatar.jsx';
 import Leaderboard, { MaskIcon } from './Leaderboard.jsx';
 import Streak, { rewardParts } from './Streak.jsx';
+import Friends from './Friends.jsx';
 import Sheet from './Sheet.jsx';
 
 const FLUSH_MS = 7000;      // раз в 7 секунд отправляем накопленные тапы
@@ -288,6 +289,8 @@ const Game = forwardRef(function Game({ user, active, balance, onBalance, onGift
       )}
 
       <Streak streak={state?.streak} busy={busy} onClaim={doClaim} />
+
+      <Friends active={active} onToast={showToast} />
 
       <Leaderboard
         active={active}

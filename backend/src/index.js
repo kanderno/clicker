@@ -12,7 +12,7 @@ import { listEventsWithOptions, toMyBetsView, toPlayerView } from './events.js';
 import { buildMinersView } from './miners.js';
 import { buildLeaderboard } from './leaderboard.js';
 import { isImageUrl, settingsView, validateSettings } from './adminGame.js';
-import { createTelegramApi, handleUpdate, isHttpsUrl, secretMatches } from './bot.js';
+import { createTelegramApi, handleUpdate, isHttpsUrl, parseRefParam, secretMatches } from './bot.js';
 
 const app = Fastify({ logger: true, trustProxy: true });
 
@@ -38,6 +38,22 @@ app.decorate('requireAdmin', async (req, reply) => {
 
 const USER_FIELDS = 'id, telegram_id, username, first_name, photo_url, balance';
 
+// Переход по реферальной ссылке. Сама SQL-функция отсекает старых игроков и свою же ссылку.
+async function referralInvite(req, referrerId, referredTg) {
+  const { error } = await supabase.rpc('referral_invite', { p_referrer: referrerId, p_referred_tg: referredTg });
+  if (error) req.log.error(error, 'referral_invite failed');
+}
+
+// Имя бота нужно для реферальной ссылки: берём из BOT_USERNAME или один раз спрашиваем у Telegram.
+let botUsername = (process.env.BOT_USERNAME || '').replace(/^@/, '') || null;
+async function getBotUsername() {
+  if (!botUsername) {
+    const me = await createTelegramApi(config.botToken, { base: config.telegramApiBase }).call('getMe');
+    botUsername = me.username;
+  }
+  return botUsername;
+}
+
 app.get('/health', async () => ({ ok: true, time: new Date().toISOString() }));
 
 app.post(
@@ -56,7 +72,17 @@ app.post(
     const result = validateInitData(req.body.initData, config.botToken);
     if (!result) return reply.code(401).send({ error: 'invalid_init_data' });
 
-    const { user: tg } = result;
+    const { user: tg, startParam } = result;
+
+    // Новый ли это игрок: реферальная награда только за тех, кого ещё не было в игре.
+    const { data: existing, error: findError } = await supabase
+      .from('users').select('id').eq('telegram_id', tg.id).maybeSingle();
+    if (findError) {
+      req.log.error(findError, 'users lookup failed');
+      return reply.code(500).send({ error: 'db_error' });
+    }
+    const referrer = existing ? null : parseRefParam(startParam);
+    if (referrer) await referralInvite(req, referrer, tg.id);
 
     // Upsert без поля balance: у существующего игрока баланс не трогаем.
     const { data, error } = await supabase
@@ -77,6 +103,12 @@ app.post(
     if (error) {
       req.log.error(error, 'users upsert failed');
       return reply.code(500).send({ error: 'db_error' });
+    }
+
+    // Первый вход: если человек пришёл по ссылке (через бота или startapp), пригласивший получает награду.
+    if (!existing) {
+      const { error: claimError } = await supabase.rpc('referral_claim', { p_user: data.id });
+      if (claimError) req.log.error(claimError, 'referral_claim failed');
     }
 
     const token = app.jwt.sign({ uid: data.id, tg: data.telegram_id });
@@ -303,7 +335,11 @@ if (config.webhookSecret && isHttpsUrl(config.webAppUrl)) {
       return reply.code(403).send({ error: 'forbidden' });
     }
     try {
-      await handleUpdate(req.body, { api: tg, webAppUrl: config.webAppUrl });
+      await handleUpdate(req.body, {
+        api: tg,
+        webAppUrl: config.webAppUrl,
+        onReferral: (referrerId, referredTg) => referralInvite(req, referrerId, referredTg),
+      });
     } catch (err) {
       // Всегда отвечаем 200, иначе Telegram будет бесконечно повторять то же сообщение
       req.log.error({ err: err.message }, 'telegram update failed');
@@ -1482,6 +1518,44 @@ app.get(
       .send(Buffer.from(data.data, 'base64'));
   },
 );
+
+// ---------- Рефералы: ссылка, награда за друга, список приглашённых ----------
+app.get('/referrals', { preHandler: app.authenticate, config: gameLimit }, async (req, reply) => {
+  const [stateRes, listRes] = await Promise.all([
+    supabase.rpc('referral_state', { p_user: req.user.uid }),
+    supabase
+      .from('referrals')
+      .select('referred_id, bonus, rewarded_at')
+      .eq('referrer_id', req.user.uid)
+      .not('referred_id', 'is', null)
+      .order('rewarded_at', { ascending: false })
+      .limit(50),
+  ]);
+  if (stateRes.error || !stateRes.data?.length || listRes.error) {
+    return dbFail(req, reply, stateRes.error || listRes.error, 'referrals failed');
+  }
+  const ids = listRes.data.map((r) => r.referred_id);
+  const { data: users, error } = ids.length
+    ? await supabase.from('users').select(PUBLIC_USER_FIELDS).in('id', ids)
+    : { data: [] };
+  if (error) return dbFail(req, reply, error, 'referral users failed');
+  const byId = new Map(users.map((u) => [u.id, u]));
+
+  let link = null;
+  try {
+    link = `https://t.me/${await getBotUsername()}?start=ref_${req.user.uid}`;
+  } catch (err) {
+    req.log.error({ err: err.message }, 'getMe failed'); // без ссылки экран всё равно покажет статистику
+  }
+  const s = stateRes.data[0];
+  return {
+    link,
+    bonus: Number(s.bonus),
+    invited: s.invited,
+    earned: Number(s.earned),
+    friends: listRes.data.map((r) => ({ user: byId.get(r.referred_id) ?? null, bonus: Number(r.bonus), at: r.rewarded_at })),
+  };
+});
 
 // Оформление для всех игроков: свой логотип и монета (если админ загрузил).
 app.get('/config', { preHandler: app.authenticate }, async (req, reply) => {

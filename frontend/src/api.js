@@ -115,6 +115,9 @@ export const stealFrom = (victimId) => request('/steal', { method: 'POST', body:
 export const buySteal = () => request('/steals/buy', { method: 'POST' });
 export const giftSteal = (toId) => request('/steals/gift', { method: 'POST', body: JSON.stringify({ toId }) });
 
+// ---------- Рефералы ----------
+export const getReferrals = () => request('/referrals');
+
 // ---------- Локации ----------
 export const getLocations = () => request('/locations');
 export const upgradeLocation = (id) => request(`/locations/${id}/upgrade`, { method: 'POST' });
