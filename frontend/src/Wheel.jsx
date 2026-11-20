@@ -3,6 +3,7 @@ import WebApp from '@twa-dev/sdk';
 import { assetUrl, getWheel, spinWheel } from './api.js';
 import Coin from './Coin.jsx';
 import { centerAngle, formatCountdown, labelFontSize, nextRotation, polar, sectorPath } from './wheelMath.js';
+import { FEATURES } from './features.js';
 
 const SPIN_MS = 4200;
 // Бежевые сектора и тёмный обод, как в референсе заказчика. При нечётном числе секторов
@@ -196,7 +197,9 @@ export default function Wheel({ active, balance, onBalance }) {
 
       <div className="wheel-legend">
         <p><b>Число</b> — столько монет сразу падает в кошелёк.</p>
-        <p><b>Фрибет 100</b> — бесплатная ставка на 100 монет во вкладке «Прогнозы»: монеты не списываются, а выигрыш твой.</p>
+        {FEATURES.bets && (
+          <p><b>Фрибет 100</b> — бесплатная ставка на 100 монет во вкладке «Прогнозы»: монеты не списываются, а выигрыш твой.</p>
+        )}
         <p><b>Кража</b> — заряд кражи: выбери игрока в лидерборде и забери часть его монет.</p>
         <p><b>Бонусные спины</b> дают за стрик на главном экране.</p>
       </div>

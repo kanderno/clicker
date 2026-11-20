@@ -3,6 +3,7 @@ import {
   adminCreateLeague, adminCreateLocation, adminCreatePrize, adminDeleteLeague, adminGetGame, adminSaveSettings,
   adminUpdateLeague, adminUpdateLocation, adminUpdatePrize, adminUploadImage, assetUrl,
 } from './api.js';
+import { FEATURES } from './features.js';
 
 const ERRORS = {
   bad_setting: 'Значение вне допустимых границ',
@@ -42,6 +43,10 @@ const SETTING_GROUPS = [
   ]],
   ['Рефералы', [
     ['referral_bonus', 'Монет за приглашённого друга'],
+  ]],
+  ['Экология', [
+    ['eco_reward', 'Награда за заявку по умолчанию'],
+    ['eco_daily_limit', 'Заявок от игрока в сутки'],
   ]],
   ['Прокачка удара', [
     ['tap_upgrade_base', 'Цена первого улучшения'],
@@ -116,7 +121,10 @@ function Section({ title, children }) {
 
 const STREAK_KEYS = ['coins', 'spins', 'steals', 'boost', 'vip'];
 const NAV_LABELS = [
-  ['game', 'Играть'], ['gift', 'Подарить'], ['bets', 'Прогнозы'], ['wheel', 'Колесо'],
+  ['game', 'Играть'],
+  ...(FEATURES.transfers ? [['gift', 'Подарить']] : []),
+  ...(FEATURES.bets ? [['bets', 'Прогнозы']] : []),
+  ['eco', 'Экология'], ['review', 'Проверка'], ['wheel', 'Колесо'],
   ['locations', 'Локации'], ['bank', 'Банк'], ['admin', 'Админ'],
 ];
 

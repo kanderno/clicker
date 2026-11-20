@@ -11,8 +11,9 @@ import { validateInitData } from './telegram.js';
 import { listEventsWithOptions, toMyBetsView, toPlayerView } from './events.js';
 import { buildMinersView } from './miners.js';
 import { buildLeaderboard } from './leaderboard.js';
-import { isImageUrl, settingsView, validateSettings } from './adminGame.js';
+import { SETTINGS, isImageUrl, settingsView, validateSettings } from './adminGame.js';
 import { createTelegramApi, handleUpdate, isHttpsUrl, parseRefParam, secretMatches } from './bot.js';
+import { ECO_BUCKET, ECO_MAX_BYTES, ECO_MIME, cleanEcoMedia, ecoFilePath, ecoReportView } from './eco.js';
 
 const app = Fastify({ logger: true, trustProxy: true });
 
@@ -34,6 +35,26 @@ app.decorate('requireAdmin', async (req, reply) => {
   if (!config.adminIds.includes(req.user.tg)) {
     return reply.code(403).send({ error: 'forbidden' });
   }
+});
+
+// Проверять заявки «Экология» могут админы и модераторы экологии.
+const isEcoReviewer = (tg) => config.adminIds.includes(tg) || config.ecoModeratorIds.includes(tg);
+app.decorate('requireEcoReviewer', async (req, reply) => {
+  if (!isEcoReviewer(req.user.tg)) return reply.code(403).send({ error: 'forbidden' });
+});
+
+// Выключенные функции (ставки, переводы): их маршруты отвечают 404, код остаётся на случай возврата.
+const BETS_ROUTES = [
+  '/events', '/bet', '/bet/free', '/free-bets', '/bets/mine',
+  '/admin/events', '/admin/events/:id', '/admin/events/:id/resolve', '/admin/events/:id/cancel',
+];
+const TRANSFER_ROUTES = ['/users/search', '/transfer', '/transfers', '/transfers/unseen', '/transfers/seen'];
+const disabledRoutes = new Set([
+  ...(config.features.bets ? [] : BETS_ROUTES),
+  ...(config.features.transfers ? [] : TRANSFER_ROUTES),
+]);
+app.addHook('onRequest', async (req, reply) => {
+  if (disabledRoutes.has(req.routeOptions.url)) return reply.code(404).send({ error: 'feature_disabled' });
 });
 
 const USER_FIELDS = 'id, telegram_id, username, first_name, photo_url, balance';
@@ -112,7 +133,12 @@ app.post(
     }
 
     const token = app.jwt.sign({ uid: data.id, tg: data.telegram_id });
-    return { token, user: data, isAdmin: config.adminIds.includes(data.telegram_id) };
+    return {
+      token,
+      user: data,
+      isAdmin: config.adminIds.includes(data.telegram_id),
+      isEcoReviewer: isEcoReviewer(data.telegram_id),
+    };
   },
 );
 
@@ -124,7 +150,7 @@ app.get('/me', { preHandler: app.authenticate }, async (req, reply) => {
     .single();
 
   if (error || !data) return reply.code(404).send({ error: 'user_not_found' });
-  return { user: data, isAdmin: config.adminIds.includes(data.telegram_id) };
+  return { user: data, isAdmin: config.adminIds.includes(data.telegram_id), isEcoReviewer: isEcoReviewer(data.telegram_id) };
 });
 
 app.post(
@@ -1556,6 +1582,184 @@ app.get('/referrals', { preHandler: app.authenticate, config: gameLimit }, async
     friends: listRes.data.map((r) => ({ user: byId.get(r.referred_id) ?? null, bonus: Number(r.bonus), at: r.rewarded_at })),
   };
 });
+
+// ---------- Экология: заявки с фото/видео, проверка, награда ----------
+const ECO_ERRORS = ['bad_description', 'bad_media', 'eco_pending_limit', 'eco_daily_limit', 'bad_amount', 'report_not_found'];
+function ecoFail(req, reply, error, what) {
+  const code = ECO_ERRORS.find((c) => error?.message?.includes(c));
+  if (code) return reply.code(code === 'report_not_found' ? 404 : 400).send({ error: code });
+  req.log.error(error, what);
+  return reply.code(500).send({ error: 'db_error' });
+}
+const ecoLimit = { rateLimit: { max: 30, timeWindow: '1 minute' } };
+
+// Файлы в закрытом бакете: клиенту отдаём временные ссылки (на 2 часа).
+async function ecoSignedUrls(rows) {
+  const paths = [...new Set(rows.flatMap((r) => (r.media ?? []).map((f) => f.path)))];
+  if (!paths.length) return new Map();
+  const { data, error } = await supabase.storage.from(ECO_BUCKET).createSignedUrls(paths, 2 * 3600);
+  if (error) throw error;
+  return new Map(data.filter((x) => x.signedUrl).map((x) => [x.path, x.signedUrl]));
+}
+
+// Бакет создаёт 019_eco.sql; если его там не создали — создаём при первой загрузке.
+async function ecoUpload(path, body, mime) {
+  const put = () => supabase.storage.from(ECO_BUCKET).upload(path, body, { contentType: mime, upsert: false });
+  let { error } = await put();
+  if (error && /bucket not found/i.test(error.message)) {
+    await supabase.storage.createBucket(ECO_BUCKET, {
+      public: false, fileSizeLimit: ECO_MAX_BYTES, allowedMimeTypes: Object.keys(ECO_MIME),
+    });
+    ({ error } = await put());
+  }
+  return error;
+}
+
+// Файл приходит «как есть» (тело запроса = байты файла, тип в Content-Type), без base64.
+app.addContentTypeParser(Object.keys(ECO_MIME), { parseAs: 'buffer', bodyLimit: ECO_MAX_BYTES }, (req, body, done) =>
+  done(null, body),
+);
+
+app.post(
+  '/eco/upload',
+  { preHandler: app.authenticate, config: { rateLimit: { max: 20, timeWindow: '1 minute' } }, bodyLimit: ECO_MAX_BYTES },
+  async (req, reply) => {
+    const mime = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+    const path = ecoFilePath(req.user.uid, mime);
+    if (!path || !Buffer.isBuffer(req.body) || !req.body.length) return reply.code(400).send({ error: 'bad_file' });
+    const error = await ecoUpload(path, req.body, mime);
+    if (error) {
+      req.log.error(error, 'eco upload failed');
+      return reply.code(500).send({ error: 'upload_failed' });
+    }
+    return { path, mime };
+  },
+);
+
+app.post(
+  '/eco/reports',
+  {
+    preHandler: app.authenticate,
+    config: ecoLimit,
+    schema: {
+      body: {
+        type: 'object',
+        required: ['description', 'media'],
+        properties: {
+          description: { type: 'string', minLength: 3, maxLength: 500 },
+          media: { type: 'array', minItems: 1, maxItems: 5, items: { type: 'object' } },
+        },
+      },
+    },
+  },
+  async (req, reply) => {
+    // Прикрепить можно только свои файлы, загруженные через /eco/upload.
+    const media = cleanEcoMedia(req.user.uid, req.body.media);
+    if (!media) return reply.code(400).send({ error: 'bad_media' });
+    const { data, error } = await supabase.rpc('eco_submit', {
+      p_user: req.user.uid, p_description: req.body.description, p_media: media,
+    });
+    if (error) return ecoFail(req, reply, error, 'eco_submit failed');
+    return { id: data };
+  },
+);
+
+// Экран игрока: награда, кто проверяет, мои заявки.
+app.get('/eco', { preHandler: app.authenticate, config: ecoLimit }, async (req, reply) => {
+  const [rowsRes, settingRes] = await Promise.all([
+    supabase.from('eco_reports').select('*').eq('user_id', req.user.uid).order('id', { ascending: false }).limit(20),
+    supabase.from('settings').select('value').eq('key', 'eco_reward').maybeSingle(),
+  ]);
+  if (rowsRes.error || settingRes.error) return ecoFail(req, reply, rowsRes.error || settingRes.error, 'eco state failed');
+  let urls;
+  try {
+    urls = await ecoSignedUrls(rowsRes.data);
+  } catch (err) {
+    req.log.error(err, 'eco signed urls failed');
+    urls = new Map(); // без превью список всё равно показываем
+  }
+  return {
+    reward: Number(settingRes.data?.value ?? SETTINGS.eco_reward.def),
+    reviewer: config.ecoReviewerName,
+    reports: rowsRes.data.map((r) => ecoReportView(r, urls)),
+  };
+});
+
+// Проверка: заявки по статусу (по умолчанию — ждущие, старые первыми).
+app.get(
+  '/eco/review',
+  {
+    preHandler: [app.authenticate, app.requireEcoReviewer],
+    config: ecoLimit,
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: { status: { type: 'string', enum: ['pending', 'approved', 'rejected'], default: 'pending' } },
+      },
+    },
+  },
+  async (req, reply) => {
+    const pending = req.query.status === 'pending';
+    const [rowsRes, countRes] = await Promise.all([
+      supabase.from('eco_reports').select('*').eq('status', req.query.status)
+        .order(pending ? 'id' : 'reviewed_at', { ascending: pending }).limit(30),
+      supabase.from('eco_reports').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+    ]);
+    if (rowsRes.error || countRes.error) return ecoFail(req, reply, rowsRes.error || countRes.error, 'eco review list failed');
+    const ids = [...new Set(rowsRes.data.map((r) => r.user_id))];
+    const { data: users, error } = ids.length
+      ? await supabase.from('users').select(PUBLIC_USER_FIELDS).in('id', ids)
+      : { data: [] };
+    if (error) return ecoFail(req, reply, error, 'eco review users failed');
+    const byId = new Map(users.map((u) => [u.id, u]));
+    let urls;
+    try {
+      urls = await ecoSignedUrls(rowsRes.data);
+    } catch (err) {
+      return ecoFail(req, reply, err, 'eco signed urls failed'); // без файлов проверять нечего
+    }
+    const { data: rewardRow } = await supabase.from('settings').select('value').eq('key', 'eco_reward').maybeSingle();
+    return {
+      pendingCount: countRes.count ?? 0,
+      defaultReward: Number(rewardRow?.value ?? SETTINGS.eco_reward.def),
+      reviewer: config.ecoReviewerName,
+      reports: rowsRes.data.map((r) => ecoReportView(r, urls, byId.get(r.user_id) ?? null)),
+    };
+  },
+);
+
+app.post(
+  '/eco/review/:id',
+  {
+    preHandler: [app.authenticate, app.requireEcoReviewer],
+    config: ecoLimit,
+    schema: {
+      params: idParams,
+      body: {
+        type: 'object',
+        required: ['approve'],
+        properties: {
+          approve: { type: 'boolean' },
+          reward: { type: 'integer', minimum: 0, maximum: 1000000000000 },
+          comment: { type: 'string', maxLength: 300 },
+        },
+      },
+    },
+  },
+  async (req, reply) => {
+    const { data, error } = await supabase.rpc('eco_review', {
+      p_report: req.params.id,
+      p_approve: req.body.approve,
+      p_reward: req.body.reward ?? null,
+      p_comment: req.body.comment ?? null,
+      p_reviewer_tg: req.user.tg,
+      p_reviewer_name: config.ecoReviewerName,
+    });
+    if (error || !data?.length) return ecoFail(req, reply, error, 'eco_review failed');
+    req.log.info({ reviewer: req.user.tg, report: req.params.id, ...data[0] }, 'eco report reviewed');
+    return { changed: data[0].changed, reward: Number(data[0].reward) };
+  },
+);
 
 // Оформление для всех игроков: свой логотип и монета (если админ загрузил).
 app.get('/config', { preHandler: app.authenticate }, async (req, reply) => {

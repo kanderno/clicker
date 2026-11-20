@@ -20,6 +20,8 @@ export const SETTINGS = {
   location_price_growth: { def: 1.6, min: 1, max: 10 },
   location_income_growth: { def: 1.4, min: 1, max: 10 },
   referral_bonus: { def: 5000, min: 0, max: 1e12, int: true },
+  eco_reward: { def: 1000, min: 0, max: 1e12, int: true },
+  eco_daily_limit: { def: 5, min: 1, max: 100, int: true },
 };
 
 export const DEFAULT_STREAK = [
@@ -31,7 +33,7 @@ export const DEFAULT_STREAK = [
 const STREAK_LIMITS = { coins: 1e12, spins: 100, steals: 100, boost: 1440, vip: 720 };
 
 // Вкладки нижнего меню, у которых админ может заменить иконку.
-export const NAV_TABS = ['game', 'gift', 'bets', 'wheel', 'locations', 'bank', 'admin'];
+export const NAV_TABS = ['game', 'gift', 'bets', 'eco', 'review', 'wheel', 'locations', 'bank', 'admin'];
 
 const IMAGE_URL = /^(\/img\/\d{1,12}|https:\/\/[^\s"'<>]{1,490})$/;
 export const isImageUrl = (v) => v === null || (typeof v === 'string' && IMAGE_URL.test(v));

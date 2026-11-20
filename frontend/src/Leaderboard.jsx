@@ -41,9 +41,11 @@ function PlayerRow({ p, canSteal, canOpenProfile, onGift, onSteal, onNoNick }) {
       </button>
       {!p.isMe && (
         <span className="lb-actions">
-          <button type="button" className="lb-btn lb-gift" onClick={() => onGift(p)} aria-label={`Подарить ${displayName(p)}`}>
-            <GiftIcon />
-          </button>
+          {onGift && (
+            <button type="button" className="lb-btn lb-gift" onClick={() => onGift(p)} aria-label={`Подарить ${displayName(p)}`}>
+              <GiftIcon />
+            </button>
+          )}
           <button type="button" className={`lb-btn lb-steal ${canSteal ? 'is-armed' : ''}`} onClick={() => onSteal(p)}
             aria-label={canSteal ? `Украсть у ${displayName(p)}` : 'Нет зарядов кражи'}>
             <MaskIcon />

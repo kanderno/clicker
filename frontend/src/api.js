@@ -34,7 +34,7 @@ export async function login() {
   }
   const data = await request('/auth', { method: 'POST', body: JSON.stringify({ initData }) });
   token = data.token;
-  return { ...data.user, isAdmin: Boolean(data.isAdmin) };
+  return { ...data.user, isAdmin: Boolean(data.isAdmin), isEcoReviewer: Boolean(data.isEcoReviewer) };
 }
 
 export const getMe = () => request('/me').then((d) => d.user);
@@ -114,6 +114,20 @@ export const getLeaderboard = () => request('/leaderboard');
 export const stealFrom = (victimId) => request('/steal', { method: 'POST', body: JSON.stringify({ victimId }) });
 export const buySteal = () => request('/steals/buy', { method: 'POST' });
 export const giftSteal = (toId) => request('/steals/gift', { method: 'POST', body: JSON.stringify({ toId }) });
+
+// ---------- Экология ----------
+export const getEco = () => request('/eco');
+// Файл уходит «как есть»: тело запроса = байты, тип в Content-Type (сервер сам придумывает имя).
+export const uploadEcoFile = (file, mime) =>
+  request('/eco/upload', { method: 'POST', body: file, headers: { 'Content-Type': mime } });
+export const sendEcoReport = (description, media) =>
+  request('/eco/reports', { method: 'POST', body: JSON.stringify({ description, media }) });
+export const getEcoReview = (status = 'pending') => request(`/eco/review?status=${status}`);
+export const reviewEcoReport = (id, approve, reward, comment) =>
+  request(`/eco/review/${id}`, {
+    method: 'POST',
+    body: JSON.stringify({ approve, ...(reward !== undefined ? { reward } : {}), ...(comment ? { comment } : {}) }),
+  });
 
 // ---------- Рефералы ----------
 export const getReferrals = () => request('/referrals');

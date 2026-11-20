@@ -11,11 +11,16 @@ import Predictions from './Predictions.jsx';
 import Wheel from './Wheel.jsx';
 import Locations from './Locations.jsx';
 import Admin from './Admin.jsx';
+import Eco from './Eco.jsx';
+import EcoReview from './EcoReview.jsx';
+import { FEATURES } from './features.js';
 
+// «Подарить» и «Прогнозы» выключены (features.js), на их месте — «Экология».
 const BASE_TABS = [
   { id: 'game', label: 'Играть', icon: 'game' },
-  { id: 'gift', label: 'Подарить', icon: 'gift' },
-  { id: 'bets', label: 'Прогнозы', icon: 'bets' },
+  ...(FEATURES.transfers ? [{ id: 'gift', label: 'Подарить', icon: 'gift' }] : []),
+  ...(FEATURES.bets ? [{ id: 'bets', label: 'Прогнозы', icon: 'bets' }] : []),
+  { id: 'eco', label: 'Экология', icon: 'eco' },
   { id: 'wheel', label: 'Колесо', icon: 'wheel' },
   { id: 'locations', label: 'Локации', icon: 'locations' },
   { id: 'bank', label: 'Банк', icon: 'bank' },
@@ -46,6 +51,18 @@ const ICONS = {
     <>
       <rect x="3" y="8" width="18" height="4" rx="1" />
       <path d="M12 8v13M5 12v9h14v-9M7.5 8a2.5 2.5 0 010-5C11 3 12 8 12 8s1-5 4.5-5a2.5 2.5 0 010 5" />
+    </>
+  ),
+  eco: (
+    <>
+      <path d="M5 19c0-8 5-13 15-14-1 10-6 15-14 15" />
+      <path d="M5 19c3-4 6-7 10-9" />
+    </>
+  ),
+  review: (
+    <>
+      <rect x="4" y="3" width="16" height="18" rx="2" />
+      <path d="M8 8h8M8 12h4M9 16.5l2 2 4-4" />
     </>
   ),
   bank: <path d="M3 9.5 12 4l9 5.5M4 9.5V20M20 9.5V20M2 20h20M8 20v-7M16 20v-7M12 20v-7" />,
@@ -100,7 +117,12 @@ function Main({ user }) {
   const [notices, setNotices] = useState(null); // { list, upToId }: результаты ставок и другие новости
   const [giftPreset, setGiftPreset] = useState(null); // { user, nonce }: получатель из лидерборда
   // Вкладка админа только для админов. Настоящая защита на сервере (403), это лишь интерфейс.
-  const tabs = user.isAdmin ? [...BASE_TABS, { id: 'admin', label: 'Админ', icon: 'admin' }] : BASE_TABS;
+  // «Проверка» — для админов и модераторов экологии (сервер тоже проверяет права).
+  const tabs = [
+    ...BASE_TABS,
+    ...(user.isEcoReviewer ? [{ id: 'review', label: 'Проверка', icon: 'review' }] : []),
+    ...(user.isAdmin ? [{ id: 'admin', label: 'Админ', icon: 'admin' }] : []),
+  ];
 
   const checkThefts = useCallback(async () => {
     try {
@@ -149,7 +171,7 @@ function Main({ user }) {
   useEffect(() => {
     const check = () => {
       checkThefts();
-      checkTransfers();
+      if (FEATURES.transfers) checkTransfers();
       checkNotices();
     };
     check();
@@ -214,11 +236,16 @@ function Main({ user }) {
       <main className="app-main flex-1 min-h-0">
         {/* Кликер не размонтируем: его таймер отправки тапов должен работать всегда */}
         <div className={tab === 'game' ? 'h-full' : 'hidden'}>
-          <Game ref={gameRef} user={user} active={tab === 'game'} balance={balance} onBalance={setBalance} onGift={giftTo}
+          <Game ref={gameRef} user={user} active={tab === 'game'} balance={balance} onBalance={setBalance} onGift={FEATURES.transfers ? giftTo : undefined}
             theme={theme} onToggleTheme={toggleTheme} />
         </div>
-        <div className={tab === 'bets' ? 'h-full' : 'hidden'}>
-          <Predictions active={tab === 'bets'} balance={balance} onBalance={setBalance} />
+        {FEATURES.bets && (
+          <div className={tab === 'bets' ? 'h-full' : 'hidden'}>
+            <Predictions active={tab === 'bets'} balance={balance} onBalance={setBalance} />
+          </div>
+        )}
+        <div className={tab === 'eco' ? 'h-full' : 'hidden'}>
+          <Eco active={tab === 'eco'} />
         </div>
         <div className={tab === 'wheel' ? 'h-full' : 'hidden'}>
           <Wheel active={tab === 'wheel'} balance={balance} onBalance={setBalance} />
@@ -229,9 +256,16 @@ function Main({ user }) {
         <div className={tab === 'bank' ? 'h-full' : 'hidden'}>
           <Bank active={tab === 'bank'} onBalance={setBalance} />
         </div>
-        <div className={tab === 'gift' ? 'h-full' : 'hidden'}>
-          <Transfer active={tab === 'gift'} wallet={balance} onDone={setBalance} preset={giftPreset} />
-        </div>
+        {FEATURES.transfers && (
+          <div className={tab === 'gift' ? 'h-full' : 'hidden'}>
+            <Transfer active={tab === 'gift'} wallet={balance} onDone={setBalance} preset={giftPreset} />
+          </div>
+        )}
+        {user.isEcoReviewer && (
+          <div className={tab === 'review' ? 'h-full' : 'hidden'}>
+            <EcoReview active={tab === 'review'} />
+          </div>
+        )}
         {user.isAdmin && (
           <div className={tab === 'admin' ? 'h-full' : 'hidden'}>
             <Admin active={tab === 'admin'} />

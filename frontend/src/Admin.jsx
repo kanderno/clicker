@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { adminCancelEvent, adminCreateEvent, adminDeleteEvent, adminListEvents, adminResolveEvent } from './api.js';
 import AdminCoins from './AdminCoins.jsx';
 import AdminGame from './AdminGame.jsx';
+import { FEATURES } from './features.js';
 
 const ERRORS = {
   bad_title: 'Название: от 3 до 200 символов',
@@ -37,7 +38,19 @@ const parseOdds = (s) => {
   return Number.isFinite(v) && v >= 1.01 && v <= 1000 ? Math.round(v * 100) / 100 : null;
 };
 
+// Ставки выключены: в админке остаются монеты игрокам и настройки игры (события вернутся вместе со ставками).
 export default function Admin({ active }) {
+  if (FEATURES.bets) return <AdminWithEvents active={active} />;
+  return (
+    <div className="h-full overflow-y-auto px-4 py-6 pb-8 text-white">
+      <h1 className="text-center text-xl font-bold">Админка</h1>
+      <AdminCoins active={active} />
+      <AdminGame active={active} />
+    </div>
+  );
+}
+
+function AdminWithEvents({ active }) {
   const [events, setEvents] = useState(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');

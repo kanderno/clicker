@@ -22,6 +22,19 @@ export const config = {
     .split(',')
     .map((x) => Number(x.trim()))
     .filter((n) => Number.isSafeInteger(n) && n > 0),
+  // Проверяющие заявок «Экология» (кроме админов): Telegram ID через запятую. Видят только проверку заявок.
+  ecoModeratorIds: (process.env.ECO_MODERATOR_TELEGRAM_IDS || '')
+    .split(',')
+    .map((x) => Number(x.trim()))
+    .filter((n) => Number.isSafeInteger(n) && n > 0),
+  // Чьё имя стоит под проверкой заявок (игроки видят «Проверяет: …»).
+  ecoReviewerName: (process.env.ECO_REVIEWER_NAME || 'Ilyas Upushev').trim().slice(0, 60),
+  // Ставки и переводы выключены по просьбе заказчика. Вернуть: FEATURE_BETS=1 / FEATURE_TRANSFERS=1
+  // (и включить их же во frontend/src/features.js).
+  features: {
+    bets: process.env.FEATURE_BETS === '1',
+    transfers: process.env.FEATURE_TRANSFERS === '1',
+  },
   jwtSecret: process.env.JWT_SECRET,
   supabaseUrl: process.env.SUPABASE_URL,
   supabaseKey: process.env.SUPABASE_SERVICE_KEY,
