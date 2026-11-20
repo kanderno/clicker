@@ -13,6 +13,7 @@ import { buildMinersView } from './miners.js';
 import { buildLeaderboard } from './leaderboard.js';
 import { SETTINGS, isImageUrl, settingsView, validateSettings } from './adminGame.js';
 import { createTelegramApi, handleUpdate, isHttpsUrl, parseRefParam, secretMatches } from './bot.js';
+import { setupBot } from './botSetup.js';
 import { ECO_BUCKET, ECO_MAX_BYTES, ECO_MIME, cleanEcoMedia, ecoFilePath, ecoReportView } from './eco.js';
 
 const app = Fastify({ logger: true, trustProxy: true });
@@ -1827,4 +1828,22 @@ try {
 } catch (err) {
   app.log.error(err);
   process.exit(1);
+}
+
+// Сменили BOT_TOKEN (другой бот) — у нового бота нет вебхука и кнопки «Играть».
+// Поэтому при запуске сверяем вебхук и, если он не наш, настраиваем бота сами (как npm run bot:prod).
+if (config.webhookSecret && isHttpsUrl(config.webAppUrl)) {
+  const apiBaseUrl = (process.env.PUBLIC_API_URL || config.webAppUrl).replace(/\/+$/, '');
+  const tg = createTelegramApi(config.botToken, { base: config.telegramApiBase });
+  try {
+    const [info, me] = await Promise.all([tg.call('getWebhookInfo'), tg.call('getMe')]);
+    if (info.url !== `${apiBaseUrl}/telegram/webhook`) {
+      const done = await setupBot(tg, { webAppUrl: config.webAppUrl, apiBaseUrl, webhookSecret: config.webhookSecret });
+      app.log.info({ bot: me.username, done }, 'бот настроен автоматически');
+    } else {
+      app.log.info({ bot: me.username }, 'вебхук бота уже настроен');
+    }
+  } catch (err) {
+    app.log.error({ err: err.message }, 'автонастройка бота не удалась (проверь BOT_TOKEN)');
+  }
 }

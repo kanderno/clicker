@@ -16,7 +16,7 @@ const freePort = () =>
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const SECRET = 'test-secret-123';
-let fake, fakeRequests, backend, port, noHookBackend, noHookPort;
+let fake, fakeRequests, startupRequests, backend, port, noHookBackend, noHookPort;
 
 const startBackend = async (env) => {
   const p = await freePort();
@@ -56,6 +56,19 @@ before(async () => {
   }));
   const second = await startBackend({}); // без вебхука
   noHookBackend = second.child; noHookPort = second.port;
+  // При запуске бэкенд сам настраивает бота (вебхук у поддельного Telegram пустой): ждём и запоминаем.
+  for (let i = 0; i < 50 && !fakeRequests.some((r) => r.url.endsWith('/setWebhook')); i++) await sleep(50);
+  startupRequests = fakeRequests.splice(0);
+});
+
+test('при запуске новый бот настраивается сам: вебхук, кнопка «Играть», команды', () => {
+  const methods = startupRequests.map((r) => r.url.split('/').pop());
+  assert.ok(methods.includes('getWebhookInfo'));
+  assert.ok(methods.includes('setChatMenuButton'));
+  assert.ok(methods.includes('setMyCommands'));
+  const hook = startupRequests.find((r) => r.url.endsWith('/setWebhook'));
+  assert.equal(hook.body.url, 'https://game.example.com/telegram/webhook');
+  assert.equal(hook.body.secret_token, SECRET);
 });
 
 after(() => {
