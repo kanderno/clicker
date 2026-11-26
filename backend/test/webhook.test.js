@@ -116,6 +116,15 @@ test('если Telegram недоступен, вебхук всё равно о�
   assert.equal(res.status, 200);
 });
 
+test('по умолчанию ставки и переводы включены, «Экология» выключена (404 feature_disabled)', async () => {
+  const get = (p) => fetch(`http://127.0.0.1:${noHookPort}${p}`);
+  const eco = await get('/eco');
+  assert.equal(eco.status, 404);
+  assert.equal((await eco.json()).error, 'feature_disabled');
+  assert.equal((await get('/events')).status, 401); // маршрут есть, просто нужен вход
+  assert.equal((await get('/transfers')).status, 401);
+});
+
 test('без WEBAPP_URL и секрета маршрут вебхука выключен (404), остальной API работает', async () => {
   assert.equal((await post(noHookPort, update, { 'x-telegram-bot-api-secret-token': SECRET })).status, 404);
   assert.equal((await fetch(`http://127.0.0.1:${noHookPort}/health`)).status, 200);

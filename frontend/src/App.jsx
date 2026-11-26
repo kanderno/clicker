@@ -15,12 +15,12 @@ import Eco from './Eco.jsx';
 import EcoReview from './EcoReview.jsx';
 import { FEATURES } from './features.js';
 
-// «Подарить» и «Прогнозы» выключены (features.js), на их месте — «Экология».
+// Какие вкладки показывать, решают флаги в features.js (сейчас «Экология» выключена).
 const BASE_TABS = [
   { id: 'game', label: 'Играть', icon: 'game' },
   ...(FEATURES.transfers ? [{ id: 'gift', label: 'Подарить', icon: 'gift' }] : []),
   ...(FEATURES.bets ? [{ id: 'bets', label: 'Прогнозы', icon: 'bets' }] : []),
-  { id: 'eco', label: 'Экология', icon: 'eco' },
+  ...(FEATURES.eco ? [{ id: 'eco', label: 'Экология', icon: 'eco' }] : []),
   { id: 'wheel', label: 'Колесо', icon: 'wheel' },
   { id: 'locations', label: 'Локации', icon: 'locations' },
   { id: 'bank', label: 'Банк', icon: 'bank' },
@@ -120,7 +120,7 @@ function Main({ user }) {
   // «Проверка» — для админов и модераторов экологии (сервер тоже проверяет права).
   const tabs = [
     ...BASE_TABS,
-    ...(user.isEcoReviewer ? [{ id: 'review', label: 'Проверка', icon: 'review' }] : []),
+    ...(FEATURES.eco && user.isEcoReviewer ? [{ id: 'review', label: 'Проверка', icon: 'review' }] : []),
     ...(user.isAdmin ? [{ id: 'admin', label: 'Админ', icon: 'admin' }] : []),
   ];
 
@@ -244,9 +244,11 @@ function Main({ user }) {
             <Predictions active={tab === 'bets'} balance={balance} onBalance={setBalance} />
           </div>
         )}
-        <div className={tab === 'eco' ? 'h-full' : 'hidden'}>
-          <Eco active={tab === 'eco'} />
-        </div>
+        {FEATURES.eco && (
+          <div className={tab === 'eco' ? 'h-full' : 'hidden'}>
+            <Eco active={tab === 'eco'} />
+          </div>
+        )}
         <div className={tab === 'wheel' ? 'h-full' : 'hidden'}>
           <Wheel active={tab === 'wheel'} balance={balance} onBalance={setBalance} />
         </div>
@@ -261,7 +263,7 @@ function Main({ user }) {
             <Transfer active={tab === 'gift'} wallet={balance} onDone={setBalance} preset={giftPreset} />
           </div>
         )}
-        {user.isEcoReviewer && (
+        {FEATURES.eco && user.isEcoReviewer && (
           <div className={tab === 'review' ? 'h-full' : 'hidden'}>
             <EcoReview active={tab === 'review'} />
           </div>

@@ -12,7 +12,9 @@ import { listEventsWithOptions, toMyBetsView, toPlayerView } from './events.js';
 import { buildMinersView } from './miners.js';
 import { buildLeaderboard } from './leaderboard.js';
 import { SETTINGS, isImageUrl, settingsView, validateSettings } from './adminGame.js';
-import { createTelegramApi, handleUpdate, isHttpsUrl, parseRefParam, secretMatches } from './bot.js';
+import {
+  BOT_DESCRIPTION, BOT_SHORT_DESCRIPTION, createTelegramApi, handleUpdate, isHttpsUrl, parseRefParam, secretMatches,
+} from './bot.js';
 import { setupBot } from './botSetup.js';
 import { ECO_BUCKET, ECO_MAX_BYTES, ECO_MIME, cleanEcoMedia, ecoFilePath, ecoReportView } from './eco.js';
 
@@ -38,21 +40,24 @@ app.decorate('requireAdmin', async (req, reply) => {
   }
 });
 
-// Проверять заявки «Экология» могут админы и модераторы экологии.
-const isEcoReviewer = (tg) => config.adminIds.includes(tg) || config.ecoModeratorIds.includes(tg);
+// Проверять заявки «Экология» могут админы и модераторы экологии (пока экология включена).
+const isEcoReviewer = (tg) =>
+  config.features.eco && (config.adminIds.includes(tg) || config.ecoModeratorIds.includes(tg));
 app.decorate('requireEcoReviewer', async (req, reply) => {
   if (!isEcoReviewer(req.user.tg)) return reply.code(403).send({ error: 'forbidden' });
 });
 
-// Выключенные функции (ставки, переводы): их маршруты отвечают 404, код остаётся на случай возврата.
+// Выключенные функции (ставки, переводы, экология): их маршруты отвечают 404, код остаётся на случай возврата.
 const BETS_ROUTES = [
   '/events', '/bet', '/bet/free', '/free-bets', '/bets/mine',
   '/admin/events', '/admin/events/:id', '/admin/events/:id/resolve', '/admin/events/:id/cancel',
 ];
 const TRANSFER_ROUTES = ['/users/search', '/transfer', '/transfers', '/transfers/unseen', '/transfers/seen'];
+const ECO_ROUTES = ['/eco', '/eco/upload', '/eco/reports', '/eco/review', '/eco/review/:id'];
 const disabledRoutes = new Set([
   ...(config.features.bets ? [] : BETS_ROUTES),
   ...(config.features.transfers ? [] : TRANSFER_ROUTES),
+  ...(config.features.eco ? [] : ECO_ROUTES),
 ]);
 app.addHook('onRequest', async (req, reply) => {
   if (disabledRoutes.has(req.routeOptions.url)) return reply.code(404).send({ error: 'feature_disabled' });
@@ -1841,6 +1846,13 @@ if (config.webhookSecret && isHttpsUrl(config.webAppUrl)) {
       const done = await setupBot(tg, { webAppUrl: config.webAppUrl, apiBaseUrl, webhookSecret: config.webhookSecret });
       app.log.info({ bot: me.username, done }, 'бот настроен автоматически');
     } else {
+      // Тексты бота поменялись в коде (например, вернули ставки) — обновляем описание без смены вебхука.
+      const { description } = await tg.call('getMyDescription');
+      if (description !== BOT_DESCRIPTION) {
+        await tg.call('setMyDescription', { description: BOT_DESCRIPTION });
+        await tg.call('setMyShortDescription', { short_description: BOT_SHORT_DESCRIPTION });
+        app.log.info({ bot: me.username }, 'описание бота обновлено');
+      }
       app.log.info({ bot: me.username }, 'вебхук бота уже настроен');
     }
   } catch (err) {

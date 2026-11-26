@@ -29,11 +29,12 @@ export const config = {
     .filter((n) => Number.isSafeInteger(n) && n > 0),
   // Чьё имя стоит под проверкой заявок (игроки видят «Проверяет: …»).
   ecoReviewerName: (process.env.ECO_REVIEWER_NAME || 'Ilyas Upushev').trim().slice(0, 60),
-  // Ставки и переводы выключены по просьбе заказчика. Вернуть: FEATURE_BETS=1 / FEATURE_TRANSFERS=1
-  // (и включить их же во frontend/src/features.js).
+  // Ставки и переводы включены (выключить: FEATURE_BETS=0 / FEATURE_TRANSFERS=0), «Экология» выключена
+  // (вернуть: FEATURE_ECO=1). Флаги должны совпадать с frontend/src/features.js.
   features: {
-    bets: process.env.FEATURE_BETS === '1',
-    transfers: process.env.FEATURE_TRANSFERS === '1',
+    bets: process.env.FEATURE_BETS !== '0',
+    transfers: process.env.FEATURE_TRANSFERS !== '0',
+    eco: process.env.FEATURE_ECO === '1',
   },
   jwtSecret: process.env.JWT_SECRET,
   supabaseUrl: process.env.SUPABASE_URL,
