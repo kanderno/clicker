@@ -3,6 +3,7 @@ import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import net from 'node:net';
+import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
@@ -123,6 +124,21 @@ test('по умолчанию ставки и переводы включены,
   assert.equal((await eco.json()).error, 'feature_disabled');
   assert.equal((await get('/events')).status, 401); // маршрут есть, просто нужен вход
   assert.equal((await get('/transfers')).status, 401);
+});
+
+test('лимит запросов нельзя обойти подделкой X-Forwarded-For: считается по игроку из JWT', async () => {
+  const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const head = `${b64({ alg: 'HS256', typ: 'JWT' })}.${b64({ uid: 77, tg: 77, iat: Math.floor(Date.now() / 1000) })}`;
+  const sig = crypto.createHmac('sha256', 'x'.repeat(40)).update(head).digest('base64url');
+  const tap = (i) => fetch(`http://127.0.0.1:${noHookPort}/tap`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${head}.${sig}`, 'x-forwarded-for': `10.0.${i >> 8}.${i & 255}` },
+    body: JSON.stringify({ count: 1 }),
+  });
+  const codes = [];
+  for (let i = 0; i < 61; i++) codes.push((await tap(i)).status); // лимит /tap — 60 в минуту
+  assert.ok(!codes.slice(0, 60).includes(429));
+  assert.equal(codes[60], 429);
 });
 
 test('без WEBAPP_URL и секрета маршрут вебхука выключен (404), остальной API работает', async () => {

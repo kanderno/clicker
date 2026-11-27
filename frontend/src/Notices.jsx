@@ -7,6 +7,7 @@ const KINDS = {
   bet_refund: { sign: '↩ ', cls: 'text-amber-300', text: () => 'Событие отменено, ставка вернулась' },
   league_reward: { sign: '+', cls: 'text-emerald-300', text: (n) => `Награда лиги: ${n.body}` },
   referral: { sign: '+', cls: 'text-emerald-300', text: () => 'Друг пришёл в игру по твоей ссылке' },
+  referral_welcome: { sign: '+', cls: 'text-emerald-300', text: (n) => `Бонус за вход по приглашению от ${n.title}` },
   eco_approved: { sign: '+', cls: 'text-emerald-300', text: (n) => `Заявка «Экология» одобрена 🌱 ${n.body ? `· ${n.body}` : ''}` },
   eco_rejected: { sign: '', cls: 'text-red-300', text: (n) => `Заявка «Экология» отклонена${n.body ? `: ${n.body}` : ''}`, hideAmount: true },
   steal_gift: { sign: '', cls: 'text-red-300', text: () => 'подарил(а) тебе заряд кражи — используй его в лидерборде', hideAmount: true },

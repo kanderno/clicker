@@ -21,7 +21,21 @@ import { ECO_BUCKET, ECO_MAX_BYTES, ECO_MIME, cleanEcoMedia, ecoFilePath, ecoRep
 const app = Fastify({ logger: true, trustProxy: true });
 
 await app.register(cors, { origin: config.origins.length ? config.origins : false });
-await app.register(rateLimit, { max: 120, timeWindow: '1 minute' });
+// Лимиты считаем по игроку из проверенного JWT: IP за прокси берётся из X-Forwarded-For,
+// который клиент может подделать и так обойти лимит. Без токена (или с поддельным) — по IP.
+await app.register(rateLimit, {
+  max: 120,
+  timeWindow: '1 minute',
+  keyGenerator: (req) => {
+    const auth = req.headers.authorization;
+    if (auth?.startsWith('Bearer ')) {
+      try {
+        return `u${app.jwt.verify(auth.slice(7)).uid}`;
+      } catch { /* неверный токен: считаем по IP */ }
+    }
+    return req.ip;
+  },
+});
 await app.register(jwt, { secret: config.jwtSecret, sign: { expiresIn: '7d' } });
 
 // Все эндпоинты, кроме /auth и /health, подключают этот хук.
@@ -132,10 +146,11 @@ app.post(
       return reply.code(500).send({ error: 'db_error' });
     }
 
-    // Первый вход: если человек пришёл по ссылке (через бота или startapp), пригласивший получает награду.
+    // Первый вход: если человек пришёл по ссылке (через бота или startapp), награду получают оба.
     if (!existing) {
-      const { error: claimError } = await supabase.rpc('referral_claim', { p_user: data.id });
+      const { data: claim, error: claimError } = await supabase.rpc('referral_claim', { p_user: data.id });
       if (claimError) req.log.error(claimError, 'referral_claim failed');
+      else if (Number(claim?.[0]?.welcome) > 0) data.balance = Number(data.balance) + Number(claim[0].welcome);
     }
 
     const token = app.jwt.sign({ uid: data.id, tg: data.telegram_id });
@@ -1553,7 +1568,7 @@ app.get(
 
 // ---------- Рефералы: ссылка, награда за друга, список приглашённых ----------
 app.get('/referrals', { preHandler: app.authenticate, config: gameLimit }, async (req, reply) => {
-  const [stateRes, listRes] = await Promise.all([
+  const [stateRes, listRes, welcomeRes] = await Promise.all([
     supabase.rpc('referral_state', { p_user: req.user.uid }),
     supabase
       .from('referrals')
@@ -1562,6 +1577,7 @@ app.get('/referrals', { preHandler: app.authenticate, config: gameLimit }, async
       .not('referred_id', 'is', null)
       .order('rewarded_at', { ascending: false })
       .limit(50),
+    supabase.from('settings').select('value').eq('key', 'referral_welcome_bonus').maybeSingle(),
   ]);
   if (stateRes.error || !stateRes.data?.length || listRes.error) {
     return dbFail(req, reply, stateRes.error || listRes.error, 'referrals failed');
@@ -1583,6 +1599,7 @@ app.get('/referrals', { preHandler: app.authenticate, config: gameLimit }, async
   return {
     link,
     bonus: Number(s.bonus),
+    welcome: Math.max(Number(welcomeRes.data?.value ?? SETTINGS.referral_welcome_bonus.def), 0),
     invited: s.invited,
     earned: Number(s.earned),
     friends: listRes.data.map((r) => ({ user: byId.get(r.referred_id) ?? null, bonus: Number(r.bonus), at: r.rewarded_at })),

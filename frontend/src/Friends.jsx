@@ -38,7 +38,7 @@ export default function Friends({ active, onToast }) {
   if (!data) return null;
 
   const share = () => {
-    const text = `Залетай в Pelmen Market! По моей ссылке мне дадут ${fmt(data.bonus)} монет 🥟`;
+    const text = `Залетай в Pelmen Market! ${data.welcome ? `По моей ссылке тебе сразу дадут ${fmt(data.welcome)} монет 🥟` : '🥟'}`;
     const url = `https://t.me/share/url?url=${encodeURIComponent(data.link)}&text=${encodeURIComponent(text)}`;
     try {
       WebApp.openTelegramLink(url);
@@ -75,7 +75,8 @@ export default function Friends({ active, onToast }) {
         <Sheet onClose={() => setOpen(false)}>
           <p className="text-center text-lg font-bold">Пригласи друзей</p>
           <p className="mt-1 text-center text-sm text-slate-400">
-            Друг заходит в игру по твоей ссылке впервые — тебе <b className="text-yellow-300">+{fmt(data.bonus)}</b> монет.
+            Друг заходит в игру по твоей ссылке впервые — тебе <b className="text-yellow-300">+{fmt(data.bonus)}</b> монет
+            {data.welcome > 0 && <>, а другу <b className="text-yellow-300">+{fmt(data.welcome)}</b></>}.
             Игроки, которые уже были в игре, не засчитываются.
           </p>
 
